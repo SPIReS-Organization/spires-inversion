@@ -114,9 +114,11 @@ _pixel_b_background = np.array(
 
 
 def test_invert_array2d():
-    """Regression: pin per-pixel COBYLA outputs across a (y, x, band) grid with
-    two distinct underlying spectra. Catches dimension-handling bugs in
-    invert_array2d that the 1D and single-pixel tests can't see."""
+    """Catches dimension-handling bugs in invert_array2d that the 1D and
+    single-pixel tests can't see. Asserted on shape, physical plausibility,
+    per-row consistency (same input -> same output), and residual fit quality
+    rather than pinned optimizer coordinates, which drift across platforms
+    (see README "Cross-platform numerical reproducibility")."""
     spectra_targets = np.stack([np.tile(_pixel_a_target, (3, 1)),
                                 np.tile(_pixel_b_target, (3, 1))], axis=0)
     spectra_backgrounds = np.stack([np.tile(_pixel_a_background, (3, 1)),
@@ -129,12 +131,47 @@ def test_invert_array2d():
                                            interpolator=interpolator,
                                            algorithm=1, x0=np.array(x0))
 
-    expected_a = np.array([4.06627774e-01, 1.45134297e-01, 1.37503386e+02, 3.61158111e+02])
-    expected_b = np.array([2.64258623e-01, 1.83737926e-01, 1.94833461e+02, 3.80244073e+02])
     assert results.shape == (2, 3, 4)
-    for x in range(3):
-        np.testing.assert_allclose(results[0, x], expected_a, rtol=1e-4)
-        np.testing.assert_allclose(results[1, x], expected_b, rtol=1e-4)
+
+    # Each row tiles a single pixel three times — identical inputs must produce
+    # identical outputs (catches per-pixel state leakage / index bugs).
+    for row in range(2):
+        for x in range(1, 3):
+            np.testing.assert_array_equal(results[row, x], results[row, 0])
+
+    # The two rows have different inputs and must produce different outputs
+    # (catches a bug where every pixel reads from the same source row).
+    assert not np.allclose(results[0, 0], results[1, 0])
+
+    # Physical plausibility: fsca, fshade in [0,1]; dust and grain within LUT range.
+    fsca = results[..., 0]
+    fshade = results[..., 1]
+    dust = results[..., 2]
+    grain = results[..., 3]
+    assert np.all((fsca >= 0) & (fsca <= 1))
+    assert np.all((fshade >= 0) & (fshade <= 1))
+    assert np.all((dust >= interpolator.dust_concentrations.min()) &
+                  (dust <= interpolator.dust_concentrations.max()))
+    assert np.all((grain >= interpolator.grain_sizes.min()) &
+                  (grain <= interpolator.grain_sizes.max()))
+
+    # Residual: the recovered parameters must reproduce the observed spectrum
+    # within tolerance. This is the actual contract of the inversion.
+    spectrum_shade = np.zeros_like(_pixel_a_target)
+    for row, target, background in [(0, _pixel_a_target, _pixel_a_background),
+                                    (1, _pixel_b_target, _pixel_b_background)]:
+        residual = spires.core.spectrum_difference(
+            x=results[row, 0],
+            spectrum_background=background,
+            spectrum_target=target,
+            spectrum_shade=spectrum_shade,
+            solar_angle=solar_angle,
+            bands=interpolator.bands,
+            solar_angles=interpolator.solar_angles,
+            dust_concentrations=interpolator.dust_concentrations,
+            grain_sizes=interpolator.grain_sizes,
+            lut=interpolator.reflectances)
+        assert residual < 0.05, f"row {row} residual {residual} too large"
 
 
 def test_interpolate_all_handles_non_9_band_lut():
