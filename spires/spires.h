@@ -62,6 +62,44 @@ double spectrum_difference_scaled(const std::vector<double> &x,
                                   double* lut, int n_bands, int n_solar_angles, int n_dust_concentrations, int n_grain_sizes);
 
 
+double spectrum_difference_softmax(const std::vector<double>& z,
+                                   double* spectrum_background, int len_background,
+                                   double* spectrum_target, int len_target,
+                                   double* spectrum_shade, int len_shade,
+                                   double solar_angle,
+                                   double* bands, int len_bands,
+                                   double* solar_angles, int len_solar_angles,
+                                   double* dust_concentrations, int len_dust_concentrations,
+                                   double* grain_sizes, int len_grain_sizes,
+                                   double* lut, int n_bands, int n_solar_angles, int n_dust_concentrations, int n_grain_sizes);
+
+
+double spectrum_difference_hybrid(const std::vector<double>& y,
+                                  double* spectrum_background, int len_background,
+                                  double* spectrum_target, int len_target,
+                                  double* spectrum_shade, int len_shade,
+                                  double solar_angle,
+                                  double* bands, int len_bands,
+                                  double* solar_angles, int len_solar_angles,
+                                  double* dust_concentrations, int len_dust_concentrations,
+                                  double* grain_sizes, int len_grain_sizes,
+                                  double* lut, int n_bands, int n_solar_angles, int n_dust_concentrations, int n_grain_sizes);
+
+
+std::vector<double> z_to_x(const std::vector<double>& z,
+                           double dust_min, double dust_max,
+                           double grain_min, double grain_max);
+
+
+std::vector<double> x_to_z(const std::vector<double>& x,
+                           double dust_min, double dust_max,
+                           double grain_min, double grain_max);
+
+
+std::vector<double> y_to_x_hybrid(const std::vector<double>& y);
+std::vector<double> x_to_y_hybrid(const std::vector<double>& x);
+
+
 std::vector<double>  invert(double* spectrum_background, int len_background,
                            double* spectrum_target, int len_target,
                            double* spectrum_shade, int len_shade,

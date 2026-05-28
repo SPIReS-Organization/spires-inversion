@@ -225,6 +225,77 @@ The C++ optimizations provide significant speedups over pure Python:
 - SWIG interpolator and scipy's RegularGridInterpolator behave differently when coordinates aren't linspace
 - COBYLA in scipy can't set `rhobeg` per dimension individually, requiring problem scaling
 
+### Reparameterized algorithms (4, 5, 6) and grain-bound saturation
+
+Algorithms 4-6 absorb the simplex constraint
+(`f_sca + f_shade + f_bg = 1`, all ≥ 0) into a softmax reparameterization,
+removing the need for inequality constraints. They differ in how they handle
+the LUT box bounds on dust and grain:
+
+- **Algorithms 4, 5 (full softmax):** sigmoid reparameterization on dust and
+  grain, mapping the LUT range onto an unbounded variable in z-space.
+- **Algorithm 6 (hybrid, recommended):** softmax for the fractions, but dust
+  and grain stay in physical units and are *clipped* to the LUT range inside
+  the objective — turning the bound into a true flat wall.
+
+The hybrid is the recommended path. On a real 50×50 Sentinel-2 patch (algorithm
+benchmark, max_eval=100):
+
+| Algorithm                     | Median residual | Grain ≥ 1199 µm | Time   | Speedup    |
+|-------------------------------|-----------------|-----------------|--------|------------|
+| 1: COBYLA                     | 0.1013          | 0 / 2500        | 215 ms | 1.0×       |
+| 4: NELDERMEAD-softmax (full)  | 0.0951          | 4 / 2500        | 94 ms  | 2.3×       |
+| **6: NELDERMEAD-hybrid**      | **0.0893**      | 13 / 2500       | **84 ms** | **2.6×** |
+
+#### What grain-bound saturation actually means
+
+The three algorithms produce different saturation counts for *different reasons*:
+
+- **COBYLA (0/2500)** is implicitly regularized by the simplex inequality
+  constraint; its search structure pulls toward the simplex interior, masking
+  pixels whose true optimum lies at the LUT boundary.
+- **Hybrid (13/2500 at max_eval=100)** finds the true boundary optima quickly:
+  the clip turns the bound into a flat wall, and the simplex contracts against
+  it in a few iterations and stops. We verified by direct comparison: at every
+  hybrid-saturated pixel, `grain ≈ 1200` produces a *lower* residual than
+  COBYLA's interior solution — these are genuine "grain is optimally large"
+  signals, not optimizer artifacts.
+- **Full softmax (4/2500 at max_eval=100, 376/2500 at max_eval=500)** has both
+  a small set of genuine boundary cases *and* a drift mechanism: the sigmoid's
+  derivative `d_grain/d_z_grain` vanishes as `z_grain → ∞`, so the optimizer
+  keeps taking tiny improving steps that push `z_grain` upward without bound.
+  Raising `max_eval` doesn't approach a fixed point — it accumulates more
+  drift victims (~360 of them between 100 and 500 evals on this patch).
+
+The two saturation sets barely overlap: of the 4 softmax-saturated and 13
+hybrid-saturated pixels at max_eval=100, none are common. Different algorithms,
+different signals.
+
+The diagnostic that separates "honest signal" from "drift artifact" is
+**stability under max_eval**:
+
+| Algorithm                  | Saturation @ max_eval=100 | @ max_eval=500       | Δ                 |
+|----------------------------|---------------------------|----------------------|-------------------|
+| 4: NELDERMEAD-softmax      | 4 / 2500 (0.16%)          | **376 / 2500 (15%)** | **+15% (drift)**  |
+| 6: NELDERMEAD-hybrid       | 13 / 2500 (0.5%)          | 17 / 2500 (0.7%)     | +0.2% (converged) |
+
+The hybrid's count is essentially constant; the full softmax's grows linearly
+with max_eval. That growth is the failure mode — not the absolute count.
+
+The hybrid's clip-on-entry turns the LUT bound into a true flat plateau in the
+objective: any value of dust or grain outside [min, max] maps to the same model
+spectrum as the boundary itself, so further movement contributes nothing to the
+residual and the simplex contracts and terminates. The clip introduces a
+C^0-but-not-C^1 kink at the bound, which is benign for derivative-free solvers
+(Nelder-Mead, COBYLA) but would need care for gradient-based methods.
+
+**Recommendation:** use algorithm 6 (`NELDERMEAD-hybrid`) for new work, and
+treat its saturated pixels as "grain is at the LUT boundary" — flag them
+downstream rather than assume they're optimizer noise. If using algorithms 4
+or 5, do not raise `max_eval` above the default of 100 without a downstream
+filter, because the saturation count grows with max_eval rather than
+converging.
+
 ### Cross-platform numerical reproducibility
 
 Inversion results can differ by a few percent between Linux (x86_64, gcc) and macOS

@@ -183,3 +183,180 @@ def test_interpolate_all_handles_non_9_band_lut():
                                        dust_concentration=dust_concentration,
                                        grain_size=grain_size)
     assert np.asarray(ret).shape == (n_bands,)
+
+
+def _residual(x, target, background):
+    return spires.core.spectrum_difference(
+        x=list(x),
+        spectrum_background=background,
+        spectrum_target=target,
+        spectrum_shade=np.zeros_like(target),
+        solar_angle=solar_angle,
+        bands=interpolator.bands,
+        solar_angles=interpolator.solar_angles,
+        dust_concentrations=interpolator.dust_concentrations,
+        grain_sizes=interpolator.grain_sizes,
+        lut=interpolator.reflectances)
+
+
+@pytest.mark.parametrize("algorithm,name", [(4, "NELDERMEAD-softmax"),
+                                            (5, "BOBYQA-softmax"),
+                                            (6, "NELDERMEAD-hybrid")])
+def test_invert_softmax(algorithm, name):
+    """Softmax/hybrid algorithms (4, 5, 6) absorb the simplex constraints into
+    the parameter transformation, so unconstrained NLopt solvers can be used.
+    Asserted on physical plausibility and residual fit quality (no pinned
+    coordinates — they drift across platforms and the softmax surface is
+    flatter near the bounds than the constrained version)."""
+    x = spires.core.invert(spectrum_background=spectrum_background,
+                           spectrum_target=spectrum_target,
+                           spectrum_shade=spectrum_shade,
+                           solar_angle=solar_angle,
+                           bands=interpolator.bands,
+                           solar_angles=interpolator.solar_angles,
+                           dust_concentrations=interpolator.dust_concentrations,
+                           grain_sizes=interpolator.grain_sizes,
+                           lut=interpolator.reflectances,
+                           max_eval=500,
+                           x0=x0,
+                           algorithm=algorithm)
+    x = np.asarray(x)
+
+    # Physical plausibility: simplex + box bounds satisfied by construction.
+    assert 0 <= x[0] <= 1, f"{name}: f_sca {x[0]} out of [0,1]"
+    assert 0 <= x[1] <= 1, f"{name}: f_shade {x[1]} out of [0,1]"
+    assert x[0] + x[1] <= 1 + 1e-6, f"{name}: f_sca + f_shade > 1"
+    assert (interpolator.dust_concentrations.min() <= x[2] <=
+            interpolator.dust_concentrations.max()), f"{name}: dust {x[2]} out of LUT range"
+    assert (interpolator.grain_sizes.min() <= x[3] <=
+            interpolator.grain_sizes.max()), f"{name}: grain {x[3]} out of LUT range"
+
+    # Residual: softmax variants should match or beat COBYLA's fit on this
+    # pixel (Python A/B confirmed the constraint was holding COBYLA back).
+    residual_softmax = _residual(x, spectrum_target, spectrum_background)
+    x_cobyla = spires.core.invert(spectrum_background=spectrum_background,
+                                  spectrum_target=spectrum_target,
+                                  spectrum_shade=spectrum_shade,
+                                  solar_angle=solar_angle,
+                                  bands=interpolator.bands,
+                                  solar_angles=interpolator.solar_angles,
+                                  dust_concentrations=interpolator.dust_concentrations,
+                                  grain_sizes=interpolator.grain_sizes,
+                                  lut=interpolator.reflectances,
+                                  max_eval=500, x0=x0, algorithm=1)
+    residual_cobyla = _residual(np.asarray(x_cobyla), spectrum_target, spectrum_background)
+    assert residual_softmax <= residual_cobyla * 1.05, (
+        f"{name}: residual {residual_softmax:.5f} >> COBYLA's {residual_cobyla:.5f}")
+
+
+def _real_imagery_setup():
+    """Load the Sentinel-2 LFS subset, or skip the test cleanly. Returns
+    (R, R0, sza_array, sza_scalar, residual_fn, n_pixels)."""
+    xr = pytest.importorskip("xarray")
+    try:
+        ds = xr.open_dataset('tests/data/sentinel_r_subset.nc')
+        ds0 = xr.open_dataset('tests/data/sentinel_r0_subset.nc')
+    except (OSError, ValueError):
+        pytest.skip("LFS test data not available (run `git lfs pull`)")
+
+    R = np.ascontiguousarray(
+        ds['reflectance'].isel(time=0).transpose('y', 'x', 'band').values.astype(np.float64))
+    R0 = np.ascontiguousarray(
+        ds0['reflectance'].transpose('y', 'x', 'band').values.astype(np.float64))
+    sza = np.full(R.shape[:2],
+                  float(np.nanmean(ds['sun_zenith_grid'].isel(time=0).values)))
+    sza0 = float(sza[0, 0])
+    shade = np.zeros(9)
+    n = R.shape[0] * R.shape[1]
+
+    def residuals(res):
+        flat = res.reshape(-1, 4)
+        flat_t = R.reshape(-1, 9)
+        flat_b = R0.reshape(-1, 9)
+        return np.array([
+            spires.snow_diff_4(flat[i], flat_t[i], flat_b[i], sza0, interpolator, shade)
+            for i in range(n)
+        ])
+
+    return R, R0, sza, sza0, residuals, n
+
+
+def test_softmax_beats_cobyla_on_real_imagery():
+    """End-to-end contract on a real 50x50 Sentinel-2 patch (LFS): the softmax
+    Nelder-Mead variant (algorithm=4) must produce a median residual that is at
+    least as good as COBYLA's at the same max_eval, and must not saturate the
+    grain bound on more than ~2% of pixels at max_eval=100."""
+    R, R0, sza, _, residuals, n = _real_imagery_setup()
+
+    res_cobyla = spires.speedy_invert_array2d(
+        spectra_targets=R, spectra_backgrounds=R0, obs_solar_angles=sza,
+        interpolator=interpolator, algorithm=1, max_eval=100, x0=np.array(x0))
+    res_softmax = spires.speedy_invert_array2d(
+        spectra_targets=R, spectra_backgrounds=R0, obs_solar_angles=sza,
+        interpolator=interpolator, algorithm=4, max_eval=100, x0=np.array(x0))
+
+    r_cobyla = residuals(res_cobyla)
+    r_softmax = residuals(res_softmax)
+
+    assert np.median(r_softmax) <= np.median(r_cobyla), (
+        f"softmax median {np.median(r_softmax):.4f} > COBYLA median {np.median(r_cobyla):.4f}")
+
+    grain_max = interpolator.grain_sizes.max()
+    grain = res_softmax[..., 3]
+    n_saturated = int((grain >= grain_max - 1).sum())
+    assert n_saturated / n <= 0.02, (
+        f"softmax saturated grain on {n_saturated}/{n} pixels (>2%) — "
+        "the unconstrained problem may be too loose at this max_eval")
+
+
+def test_hybrid_saturation_is_stable_under_max_eval():
+    """The hybrid algorithm (6 = softmax for fractions + clip for dust/grain)
+    should converge to a stable saturation set: pixels whose true optimum lies
+    at the LUT grain boundary find that boundary in a few iterations and stop,
+    so the saturation count at max_eval=500 must be close to the count at
+    max_eval=100.
+
+    The full sigmoid (algorithm 4) lacks this property — its saturation count
+    grows roughly linearly with max_eval as more pixels drift up the asymptotic
+    z-ridge. So this test pins the *stability* property that distinguishes
+    honest boundary signal from optimizer drift. On this patch the hybrid
+    grows by ~4 pixels (13 → 17) between max_eval 100 and 500; the full
+    softmax grows by ~370 (4 → 376)."""
+    R, R0, sza, _, _, n = _real_imagery_setup()
+    grain_max = interpolator.grain_sizes.max()
+
+    def n_saturated(max_eval):
+        res = spires.speedy_invert_array2d(
+            spectra_targets=R, spectra_backgrounds=R0, obs_solar_angles=sza,
+            interpolator=interpolator, algorithm=6, max_eval=max_eval,
+            x0=np.array(x0))
+        return int((res[..., 3] >= grain_max - 1).sum())
+
+    sat_100 = n_saturated(100)
+    sat_500 = n_saturated(500)
+    growth = (sat_500 - sat_100) / n
+
+    # Stability bar: ≤1% additional pixels saturate when max_eval grows 5×.
+    # Hybrid currently shows ~0.2% on this patch; full softmax shows ~15%.
+    # The 1% bar separates the regimes with platform-variance headroom.
+    assert growth <= 0.01, (
+        f"hybrid saturation grew from {sat_100} to {sat_500} of {n} pixels "
+        f"({growth:.2%}) when max_eval went 100 -> 500. Growth >1% suggests "
+        "the clip-on-entry mechanism is no longer pinning saturated pixels — "
+        "the optimizer may be drifting like the full softmax (algorithm 4)")
+
+
+def test_invert_unknown_algorithm_raises():
+    """Unknown algorithm codes must raise rather than silently running with an
+    uninitialized nlopt::opt — guards against the previous fallthrough bug."""
+    with pytest.raises(RuntimeError):
+        spires.core.invert(spectrum_background=spectrum_background,
+                           spectrum_target=spectrum_target,
+                           spectrum_shade=spectrum_shade,
+                           solar_angle=solar_angle,
+                           bands=interpolator.bands,
+                           solar_angles=interpolator.solar_angles,
+                           dust_concentrations=interpolator.dust_concentrations,
+                           grain_sizes=interpolator.grain_sizes,
+                           lut=interpolator.reflectances,
+                           max_eval=100, x0=x0, algorithm=99)

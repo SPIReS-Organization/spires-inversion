@@ -44,9 +44,26 @@ def speedy_invert(spectrum_target, spectrum_background, solar_angle, spectrum_sh
         Default is [0.5, 0.05, 10, 250].
     algorithm : int, optional
         Optimization algorithm to use (default: 2).
-        1 = LN_COBYLA (Constrained Optimization BY Linear Approximations),
-        2 = LN_NELDERMEAD (Nelder-Mead simplex),
-        3 = LD_SLSQP (Sequential Least Squares Programming, not working in C++).
+        1 = LN_COBYLA (constrained, derivative-free),
+        2 = LN_NELDERMEAD (unconstrained simplex; ignores box bounds),
+        3 = LD_SLSQP (gradient-based; degraded — uses NLopt's finite-diff fallback),
+        4 = LN_NELDERMEAD on softmax-reparameterized cost (full softmax),
+        5 = LN_BOBYQA on softmax-reparameterized cost (quadratic-model variant),
+        6 = LN_NELDERMEAD on hybrid: softmax for fractions, clip-on-entry for
+            dust/grain (recommended for real imagery).
+        Algorithms 4-6 absorb the simplex (f_sca + f_shade + f_bg = 1, all ≥ 0)
+        into the parameter transformation, so unconstrained NLopt solvers can
+        replace COBYLA. On real imagery the hybrid (algorithm 6) is the
+        recommended default replacement: it beats COBYLA on both fit quality
+        and speed (~2.6× faster) and stays stable as `max_eval` is raised.
+
+        Note: algorithms 4 and 5 (full softmax) suffer grain-bound saturation
+        at high `max_eval` — the sigmoid reparameterization on dust/grain is
+        asymptotically flat near the LUT bounds, letting the optimizer drift
+        toward the upper bound while still lowering the residual. Algorithm 6
+        does not have this problem because dust/grain stay in physical units
+        with a clip in the objective, turning the bound into a true wall. See
+        the "Softmax algorithms and grain-bound saturation" note in the README.
 
     Returns
     -------
@@ -134,9 +151,26 @@ def speedy_invert_array1d(spectra_targets, spectra_backgrounds, obs_solar_angles
         Default is [0.5, 0.05, 10, 250].
     algorithm : int, optional
         Optimization algorithm to use (default: 2).
-        1 = LN_COBYLA (Constrained Optimization BY Linear Approximations),
-        2 = LN_NELDERMEAD (Nelder-Mead simplex),
-        3 = LD_SLSQP (Sequential Least Squares Programming, not working in C++).
+        1 = LN_COBYLA (constrained, derivative-free),
+        2 = LN_NELDERMEAD (unconstrained simplex; ignores box bounds),
+        3 = LD_SLSQP (gradient-based; degraded — uses NLopt's finite-diff fallback),
+        4 = LN_NELDERMEAD on softmax-reparameterized cost (full softmax),
+        5 = LN_BOBYQA on softmax-reparameterized cost (quadratic-model variant),
+        6 = LN_NELDERMEAD on hybrid: softmax for fractions, clip-on-entry for
+            dust/grain (recommended for real imagery).
+        Algorithms 4-6 absorb the simplex (f_sca + f_shade + f_bg = 1, all ≥ 0)
+        into the parameter transformation, so unconstrained NLopt solvers can
+        replace COBYLA. On real imagery the hybrid (algorithm 6) is the
+        recommended default replacement: it beats COBYLA on both fit quality
+        and speed (~2.6× faster) and stays stable as `max_eval` is raised.
+
+        Note: algorithms 4 and 5 (full softmax) suffer grain-bound saturation
+        at high `max_eval` — the sigmoid reparameterization on dust/grain is
+        asymptotically flat near the LUT bounds, letting the optimizer drift
+        toward the upper bound while still lowering the residual. Algorithm 6
+        does not have this problem because dust/grain stay in physical units
+        with a clip in the objective, turning the bound into a true wall. See
+        the "Softmax algorithms and grain-bound saturation" note in the README.
 
     Returns
     -------
@@ -214,9 +248,26 @@ def speedy_invert_array2d(spectra_targets, spectra_backgrounds, obs_solar_angles
         Default is [0.5, 0.05, 10, 250].
     algorithm : int, optional
         Optimization algorithm to use (default: 2).
-        1 = LN_COBYLA (Constrained Optimization BY Linear Approximations),
-        2 = LN_NELDERMEAD (Nelder-Mead simplex),
-        3 = LD_SLSQP (Sequential Least Squares Programming, not working in C++).
+        1 = LN_COBYLA (constrained, derivative-free),
+        2 = LN_NELDERMEAD (unconstrained simplex; ignores box bounds),
+        3 = LD_SLSQP (gradient-based; degraded — uses NLopt's finite-diff fallback),
+        4 = LN_NELDERMEAD on softmax-reparameterized cost (full softmax),
+        5 = LN_BOBYQA on softmax-reparameterized cost (quadratic-model variant),
+        6 = LN_NELDERMEAD on hybrid: softmax for fractions, clip-on-entry for
+            dust/grain (recommended for real imagery).
+        Algorithms 4-6 absorb the simplex (f_sca + f_shade + f_bg = 1, all ≥ 0)
+        into the parameter transformation, so unconstrained NLopt solvers can
+        replace COBYLA. On real imagery the hybrid (algorithm 6) is the
+        recommended default replacement: it beats COBYLA on both fit quality
+        and speed (~2.6× faster) and stays stable as `max_eval` is raised.
+
+        Note: algorithms 4 and 5 (full softmax) suffer grain-bound saturation
+        at high `max_eval` — the sigmoid reparameterization on dust/grain is
+        asymptotically flat near the LUT bounds, letting the optimizer drift
+        toward the upper bound while still lowering the residual. Algorithm 6
+        does not have this problem because dust/grain stay in physical units
+        with a clip in the objective, turning the bound into a true wall. See
+        the "Softmax algorithms and grain-bound saturation" note in the README.
     bands : numpy.ndarray, optional
         Band wavelength coordinates of reflectances. Required if interpolator not provided.
     solar_angles : numpy.ndarray, optional
@@ -308,9 +359,26 @@ def speedy_invert_xarray(spectra_targets, spectra_backgrounds, obs_solar_angles,
         Default is [0.5, 0.05, 10, 250].
     algorithm : int, optional
         Optimization algorithm to use (default: 2).
-        1 = LN_COBYLA (Constrained Optimization BY Linear Approximations),
-        2 = LN_NELDERMEAD (Nelder-Mead simplex),
-        3 = LD_SLSQP (Sequential Least Squares Programming, not working in C++).
+        1 = LN_COBYLA (constrained, derivative-free),
+        2 = LN_NELDERMEAD (unconstrained simplex; ignores box bounds),
+        3 = LD_SLSQP (gradient-based; degraded — uses NLopt's finite-diff fallback),
+        4 = LN_NELDERMEAD on softmax-reparameterized cost (full softmax),
+        5 = LN_BOBYQA on softmax-reparameterized cost (quadratic-model variant),
+        6 = LN_NELDERMEAD on hybrid: softmax for fractions, clip-on-entry for
+            dust/grain (recommended for real imagery).
+        Algorithms 4-6 absorb the simplex (f_sca + f_shade + f_bg = 1, all ≥ 0)
+        into the parameter transformation, so unconstrained NLopt solvers can
+        replace COBYLA. On real imagery the hybrid (algorithm 6) is the
+        recommended default replacement: it beats COBYLA on both fit quality
+        and speed (~2.6× faster) and stays stable as `max_eval` is raised.
+
+        Note: algorithms 4 and 5 (full softmax) suffer grain-bound saturation
+        at high `max_eval` — the sigmoid reparameterization on dust/grain is
+        asymptotically flat near the LUT bounds, letting the optimizer drift
+        toward the upper bound while still lowering the residual. Algorithm 6
+        does not have this problem because dust/grain stay in physical units
+        with a clip in the objective, turning the bound into a true wall. See
+        the "Softmax algorithms and grain-bound saturation" note in the README.
 
     Returns
     -------
@@ -607,6 +675,8 @@ def speedy_invert_scipy_softmax(interpolator: spires.interpolator.LutInterpolato
     model_refl = interpolator.interpolate_all(solar_angle=solar_angle,
                                               dust_concentration=dust, grain_size=grain)
     return res, model_refl
+
+
 
 
 def speedy_invert_scipy(interpolator: spires.interpolator.LutInterpolator, spectrum_target, spectrum_background,
