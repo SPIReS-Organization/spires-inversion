@@ -1,6 +1,7 @@
 # SpiPy
 
 [![PyPI version](https://badge.fury.io/py/spires.svg)](https://pypi.org/project/spires/)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18747284.svg)](https://doi.org/10.5281/zenodo.18747284)
 [![Documentation Status](https://readthedocs.org/projects/spipy/badge/?version=latest)](https://spipy.readthedocs.io/en/latest/?badge=latest)
 [![Build and Test](https://github.com/NiklasPhabian/SpiPy/workflows/Build%20and%20Test/badge.svg)](https://github.com/NiklasPhabian/SpiPy/actions)
 [![Python 3.9-3.14](https://img.shields.io/badge/python-3.9--3.14-blue.svg)](https://github.com/NiklasPhabian/SpiPy)
@@ -8,7 +9,7 @@
 
 **[📦 View Source on GitHub](https://github.com/NiklasPhabian/SpiPy)** | **[📖 Documentation](https://spipy.readthedocs.io)** | **[🐛 Report Issues](https://github.com/NiklasPhabian/SpiPy/issues)**
 
-SpiPy is a Python implementation of [SPIRES](https://ieeexplore.ieee.org/document/9290428) (SPectral Inversion of REflectance from Snow), originally implemented in MATLAB ([SPIRES GitHub repository](https://github.com/edwardbair/SPIRES)).
+SpiPy is a Python implementation of [SPIRES](https://ieeexplore.ieee.org/document/9290428) (Snow Property Inversion From Remote Sensing), originally implemented in MATLAB ([SPIRES GitHub repository](https://github.com/edwardbair/SPIRES)).
 
 ## Overview
 
@@ -78,15 +79,29 @@ Basic usage:
 
 ```python
 import spires
+import numpy as np
 
 # Load lookup table
 interpolator = spires.LutInterpolator(
     lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat'
 )
 
-# Process imagery to get fractional snow-covered area
-fsca = spires.get_fsca(...)
+# Invert a single mixed spectrum
+spectrum_target = np.array([0.3424, 0.366, 0.3624, 0.3893,
+                            0.4162, 0.3957, 0.0704, 0.0627, 0.3792])
+spectrum_background = np.array([0.0182, 0.0265, 0.0283, 0.0561,
+                                0.0954, 0.1204, 0.1249, 0.0789, 0.1406])
+
+fsca, fshade, dust, grain_size = spires.speedy_invert(
+    spectrum_target=spectrum_target,
+    spectrum_background=spectrum_background,
+    solar_angle=55.73,
+    interpolator=interpolator,
+)
 ```
+
+See [Getting Started](https://spipy.readthedocs.io/en/latest/getting_started.html) for batch
+processing, xarray, and Dask-parallel workflows.
 
 ## Development
 
@@ -154,21 +169,23 @@ Simulated Mie-scattering snow reflectance lookup tables are available on Zenodo:
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18701286.svg)](https://doi.org/10.5281/zenodo.18701286)
 
-- **MODIS**: `LUT_MODIS.mat` (537 MB)
 - **Sentinel-2**: `lut_sentinel2b_b2to12_3um_dust.mat` (70 MB)
+- **HLS**: `lut_HLSS30_b1to13_3um_dust.mat` (101 MB)
+- **MODIS**: `lut_modis_b1to7_3um_dust.mat` (537 MB)
+- **Landsat OLI**: `lut_oli_b1to7_3um_dust.mat` (55 MB)
 
 Download using the helper script:
 ```bash
 python scripts/download_test_data.py --luts
 ```
 
-Or download directly:
+Or download directly, e.g.:
 ```bash
-curl -L -o LUT_MODIS.mat https://zenodo.org/records/18701286/files/LUT_MODIS.mat
 curl -L -o lut_sentinel2b_b2to12_3um_dust.mat https://zenodo.org/records/18701286/files/lut_sentinel2b_b2to12_3um_dust.mat
 ```
 
-**Note:** The Sentinel-2 LUT is also included in the repository via Git LFS. Landsat lookup tables are planned.
+**Note:** All LUTs above are also bundled in the repository via Git LFS — see
+[tests/data/README.md](tests/data/README.md) for details.
 
 ### Test Data
 
@@ -208,6 +225,18 @@ The C++ optimizations provide significant speedups over pure Python:
 - SWIG interpolator and scipy's RegularGridInterpolator behave differently when coordinates aren't linspace
 - COBYLA in scipy can't set `rhobeg` per dimension individually, requiring problem scaling
 
+### Cross-platform numerical reproducibility
+
+Inversion results can differ by a few percent between Linux (x86_64, gcc) and macOS
+(arm64, clang) for the same inputs. The cause is a combination of different ISAs
+rounding transcendentals (`exp`, `pow`) at the last bit, different compilers and
+libm implementations, and the fact that COBYLA is a derivative-free iterative
+solver — tiny ULP-level differences in early evaluations can cascade and steer
+the simplex toward a different local optimum on a flat region of the objective.
+The recovered parameters still reproduce the observed spectrum within tolerance,
+they just aren't bit-identical across platforms. Tests therefore assert residual
+quality and physical plausibility rather than pinning optimizer coordinates.
+
 ## Roadmap
 
 - [ ] Optimize inversion for single location over multiple timesteps (keep R_0 constant)
@@ -239,12 +268,13 @@ If you use this software, please cite the algorithm paper, software implementati
 
 **Software:**
 ```bibtex
-@software{bair2024spipy,
+@software{bair2026spipy,
   title={SpiPy: Python implementation of SPIRES snow property inversion},
-  author={Bair, Ned and Griessbaum, Niklas},
-  year={2024},
-  url={https://github.com/edwardbair/SpiPy},
-  version={0.2.0},
+  author={Bair, Edward H. and Griessbaum, Niklas},
+  year={2026},
+  url={https://github.com/NiklasPhabian/SpiPy},
+  version={0.2.8},
+  doi={10.5281/zenodo.18747284},
   note={See CITATION.cff for full metadata}
 }
 ```

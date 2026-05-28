@@ -76,8 +76,10 @@ Some notebooks have additional requirements:
 
 ## Data Notes
 
-- Notebooks assume data is stored in `/scratch/tristate/` or `/data/sentinel2/` directories
-- Most workflows are designed for UCSB region but can be adapted
+- Notebooks were authored against developer-specific data paths; you'll need to
+  edit the input/output paths near the top of each notebook to point at your
+  own data
+- Most workflows were developed for the UCSB region but can be adapted
 - Large notebooks (>1MB) contain embedded outputs and visualizations
 
 ## Development Notebooks
@@ -88,3 +90,4 @@ The `examples/development/` directory contains notebooks used during development
 - `cobyla.ipynb` - COBYLA optimizer testing
 - `invert2d.ipynb` - 2D inversion experiments
 - `compress_nc.ipynb` - NetCDF compression utilities
+- `spicy_snow_experiment.ipynb` - Comparison experiment against the spicy-snow approach

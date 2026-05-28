@@ -13,7 +13,7 @@ namespace plus those listed in the reference are public.
 .. automodsumm:: spires.invert
    :template: instance_methods.rst
 
-.. automodsumm:: spires.process
+.. automodsumm:: spires.parallel
    :template: instance_methods.rst
 
 .. automodsumm:: spires.utol
@@ -32,7 +32,7 @@ namespace plus those listed in the reference are public.
    :undoc-members:
    :show-inheritance:
 
-.. automodule:: spires.process
+.. automodule:: spires.parallel
    :members:
    :undoc-members:
    :show-inheritance:

@@ -3,19 +3,20 @@ message: "If you use this software, please cite both the software and the algori
 title: "SpiPy: Python implementation of SPIRES snow property inversion"
 authors:
   - family-names: Bair
-    given-names: Ned
+    given-names: Edward H.
     email: edwardbair@ucsb.edu
     affiliation: "University of California, Santa Barbara"
-    orcid: "https://orcid.org/0000-0002-7654-3210"  # Update with actual ORCID if available
+    orcid: "https://orcid.org/0000-0002-6554-387X"
   - family-names: Griessbaum
     given-names: Niklas
     affiliation: "Leidos, Inc."
-    orcid: "https://orcid.org/0000-0000-0000-0000"  # Update with actual ORCID if available
-version: 0.2.0
-date-released: 2024-11-06
-repository-code: "https://github.com/edwardbair/SpiPy"
-url: "https://github.com/edwardbair/SpiPy"
-license: MIT  # Update if different
+    orcid: "https://orcid.org/0000-0001-5037-6266"
+version: 0.2.8
+date-released: 2026-02-23
+repository-code: "https://github.com/NiklasPhabian/SpiPy"
+url: "https://spipy.readthedocs.io"
+license: MIT
+doi: 10.5281/zenodo.18747284
 keywords:
   - remote sensing
   - snow properties

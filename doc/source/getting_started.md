@@ -33,7 +33,7 @@ git lfs install
 
 ```bash
 # Clone the repository
-git clone https://github.com/[username]/SpiPy.git
+git clone https://github.com/NiklasPhabian/SpiPy.git
 cd SpiPy
 
 # Build SWIG extensions
@@ -128,6 +128,45 @@ results = spires.speedy_invert_xarray(
     lut_dataarray=lut
 )
 ```
+
+### Parallel Inversion with Dask
+
+For datasets too large to fit in memory or that benefit from multi-core
+processing (e.g. time series of full Sentinel-2 scenes), use the Dask-parallel
+entry point. The C++ inversion releases the Python GIL, so a Dask client with
+`threads_per_worker > 1` gives real parallel speedup while sharing one LUT
+copy per worker process.
+
+```python
+import xarray as xr
+from dask.distributed import Client
+
+import spires
+
+# Inputs as chunked DataArrays (time, y, x, band) etc.
+targets = xr.open_zarr('sentinel2_data.zarr')['reflectance']
+backgrounds = xr.open_dataarray('background_r0.nc')
+solar_angles = xr.open_dataarray('solar_angles.nc')
+
+interpolator = spires.LutInterpolator(
+    lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat'
+)
+
+with Client(n_workers=4, threads_per_worker=4) as client:
+    ds = spires.speedy_invert_dask(
+        spectra_targets=targets,
+        spectra_backgrounds=backgrounds,
+        obs_solar_angles=solar_angles,
+        interpolator=interpolator,
+        client=client,
+    )
+
+    # Encode for compact storage (NaN -> fill value, fractions scaled to int)
+    encoded = spires.encode_results(ds)
+    encoded.to_netcdf('inversion_results.nc')
+```
+
+See `examples/05_sentinel_snow_inversion.ipynb` for a complete dask workflow.
 
 ## Understanding the Algorithm
 

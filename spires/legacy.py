@@ -3,7 +3,7 @@ import scipy
 import h5py
 
 
-scipy_options = {'disp': False, 'iprint': 100, 'maxiter': 1000, 'ftol': 1e-9}
+_scipy_options = {'disp': False, 'iprint': 100, 'maxiter': 1000, 'ftol': 1e-9}
 
 
 def load_lut(lut_file):
@@ -16,7 +16,7 @@ def load_lut(lut_file):
 
 
 def speedy_invert(f, spectrum_target, spectrum_background,
-                 solar_angle, shade, mode=3, scipy_options=scipy_options, method='SLSQP'):
+                 solar_angle, shade, mode=3, scipy_options=_scipy_options, method='SLSQP'):
     """
     Inverts a spectrum and determines f_sca, f_shade, dust_concentration and grain_size.
 

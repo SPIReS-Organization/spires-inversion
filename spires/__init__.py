@@ -1,7 +1,8 @@
 from spires.invert import *
 from spires.interpolator import *
-from spires.process import *
+from spires.parallel import speedy_invert_dask, encode_results
 import spires.legacy
+import spires.parallel
 
 # Version from setuptools_scm
 from importlib.metadata import version, PackageNotFoundError
