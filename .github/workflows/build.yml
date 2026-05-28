@@ -53,11 +53,6 @@ jobs:
         echo "Using LUTs only - full imagery available at:"
         echo "  https://doi.org/10.5281/zenodo.18704072"
 
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
-
     - name: Setup Miniconda
       uses: conda-incubator/setup-miniconda@v3
       with:
@@ -69,7 +64,7 @@ jobs:
     - name: Install build dependencies from conda-forge
       shell: bash -l {0}
       run: |
-        conda install -c conda-forge swig gcc gxx nlopt
+        conda install -c conda-forge pip swig gcc gxx nlopt
 
     - name: Install Python dependencies
       shell: bash -l {0}
