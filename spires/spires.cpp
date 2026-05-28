@@ -224,6 +224,205 @@ double spectrum_difference(const std::vector<double>& x,
 }
 
 
+// ----------------------------------------------------------------------------
+// Softmax reparameterization
+//
+// Maps an unconstrained vector z ∈ R^4 to physical parameters such that the
+// simplex constraints (f_sca, f_shade, f_bg ≥ 0; f_sca + f_shade + f_bg = 1)
+// and the box bounds on dust/grain are satisfied by construction. This lets
+// unconstrained solvers (Nelder-Mead, BOBYQA) replace COBYLA on the fractional
+// sub-problem.
+//
+//   z = [z_snow, z_shade, z_dust, z_grain]
+//   (f_sca, f_shade, f_bg) = softmax(z_snow, z_shade, 0)   // z_bg pinned to 0
+//   dust  = dust_min  + (dust_max  - dust_min)  * sigmoid(z_dust)
+//   grain = grain_min + (grain_max - grain_min) * sigmoid(z_grain)
+//
+// `x_to_z` is used to seed z0 from a user-supplied physical x0 (e.g., the
+// default [0.5, 0.05, 10, 250]). `z_to_x` is applied to the optimized z* before
+// returning. Both are stable under (eps clamp on) the input range.
+// ----------------------------------------------------------------------------
+
+static inline void softmax_to_fractions(double z_snow, double z_shade,
+                                        double& f_sca, double& f_shade, double& f_bg) {
+    // Subtract the max for numerical stability — exp(x - max) ∈ (0, 1].
+    double m = std::max({z_snow, z_shade, 0.0});
+    double e0 = std::exp(z_snow - m);
+    double e1 = std::exp(z_shade - m);
+    double e2 = std::exp(-m);
+    double s = e0 + e1 + e2;
+    f_sca = e0 / s;
+    f_shade = e1 / s;
+    f_bg = e2 / s;
+}
+
+
+static inline double sigmoid_to_bounded(double z, double lo, double hi) {
+    return lo + (hi - lo) / (1.0 + std::exp(-z));
+}
+
+
+std::vector<double> z_to_x(const std::vector<double>& z,
+                           double dust_min, double dust_max,
+                           double grain_min, double grain_max) {
+    double f_sca, f_shade, f_bg;
+    softmax_to_fractions(z[0], z[1], f_sca, f_shade, f_bg);
+    double dust = sigmoid_to_bounded(z[2], dust_min, dust_max);
+    double grain = sigmoid_to_bounded(z[3], grain_min, grain_max);
+    return {f_sca, f_shade, dust, grain};
+}
+
+
+std::vector<double> x_to_z(const std::vector<double>& x,
+                           double dust_min, double dust_max,
+                           double grain_min, double grain_max) {
+    // Inverse of z_to_x. Used to translate a user-supplied physical x0 into
+    // initial guess in z-space. `eps` keeps logit() / log() finite when the
+    // user passes 0 or 1 exactly (or x outside the LUT bounds).
+    constexpr double eps = 1e-6;
+    auto clamp = [](double v, double lo, double hi) {
+        return std::min(std::max(v, lo), hi);
+    };
+
+    double f_sca = clamp(x[0], eps, 1.0 - eps);
+    double f_shade = clamp(x[1], eps, 1.0 - eps);
+    double f_bg = clamp(1.0 - f_sca - f_shade, eps, 1.0 - eps);
+    // Renormalize after clamping so log-ratios are sensible.
+    double s = f_sca + f_shade + f_bg;
+    f_sca /= s; f_shade /= s; f_bg /= s;
+    double z_snow = std::log(f_sca / f_bg);
+    double z_shade = std::log(f_shade / f_bg);
+
+    double u_d = clamp((x[2] - dust_min) / (dust_max - dust_min), eps, 1.0 - eps);
+    double u_g = clamp((x[3] - grain_min) / (grain_max - grain_min), eps, 1.0 - eps);
+    double z_dust = std::log(u_d / (1.0 - u_d));
+    double z_grain = std::log(u_g / (1.0 - u_g));
+
+    return {z_snow, z_shade, z_dust, z_grain};
+}
+
+
+double spectrum_difference_hybrid(const std::vector<double>& y,
+                                  double* spectrum_background, int len_background,
+                                  double* spectrum_target, int len_target,
+                                  double* spectrum_shade, int len_shade,
+                                  double solar_angle,
+                                  double* bands, int len_bands,
+                                  double* solar_angles, int len_solar_angles,
+                                  double* dust_concentrations, int len_dust_concentrations,
+                                  double* grain_sizes, int len_grain_sizes,
+                                  double* lut, int n_bands, int n_solar_angles, int n_dust_concentrations, int n_grain_sizes) {
+    /*
+    Hybrid spectral-difference cost:
+      - Fractions (f_sca, f_shade, f_bg) via softmax of (y[0], y[1], 0).
+      - Dust and grain in physical units, CLIPPED to the LUT range on entry.
+
+    The clip turns the LUT-bound into a true wall in the objective: any value
+    of y[2] / y[3] outside [min, max] is mapped to the same model spectrum as
+    the boundary itself, so the optimizer sees a flat plateau and stops. This
+    avoids the asymptotic drift that the full sigmoid reparameterization
+    suffers (see README "Softmax algorithms and grain-bound saturation").
+
+    The clip introduces a C^0-but-not-C^1 kink at the bound, which is benign
+    for derivative-free solvers (Nelder-Mead, COBYLA) but would need care for
+    gradient-based ones.
+
+    y = [z_snow, z_shade, dust, grain]
+    */
+    double f_sca, f_shade, f_bg;
+    softmax_to_fractions(y[0], y[1], f_sca, f_shade, f_bg);
+
+    double dust_min = dust_concentrations[0];
+    double dust_max = dust_concentrations[len_dust_concentrations - 1];
+    double grain_min = grain_sizes[0];
+    double grain_max = grain_sizes[len_grain_sizes - 1];
+    double dust = std::min(std::max(y[2], dust_min), dust_max);
+    double grain = std::min(std::max(y[3], grain_min), grain_max);
+
+    double solar_angle_idx = get_idx(solar_angle, solar_angles, len_solar_angles);
+    double dust_idx = get_idx(dust, dust_concentrations, len_dust_concentrations);
+    double grain_idx = get_idx(grain, grain_sizes, len_grain_sizes);
+
+    double diff_sq = 0.0;
+    for (int i = 0; i < len_target; ++i) {
+        double model_pure = interpolate_idx(lut, n_bands, n_solar_angles, n_dust_concentrations, n_grain_sizes,
+                                            i, solar_angle_idx, dust_idx, grain_idx);
+        double model = model_pure * f_sca + spectrum_shade[i] * f_shade + spectrum_background[i] * f_bg;
+        double d = spectrum_target[i] - model;
+        diff_sq += d * d;
+    }
+    return std::sqrt(diff_sq);
+}
+
+
+// Helpers for translating between user-facing physical x = [f_sca, f_shade, dust, grain]
+// and the hybrid's internal y = [z_snow, z_shade, dust, grain]. Dust and grain
+// are passed through unchanged; only the fractions are reparameterized.
+std::vector<double> y_to_x_hybrid(const std::vector<double>& y) {
+    double f_sca, f_shade, f_bg;
+    softmax_to_fractions(y[0], y[1], f_sca, f_shade, f_bg);
+    return {f_sca, f_shade, y[2], y[3]};
+}
+
+
+std::vector<double> x_to_y_hybrid(const std::vector<double>& x) {
+    constexpr double eps = 1e-6;
+    auto clamp = [](double v, double lo, double hi) {
+        return std::min(std::max(v, lo), hi);
+    };
+    double f_sca = clamp(x[0], eps, 1.0 - eps);
+    double f_shade = clamp(x[1], eps, 1.0 - eps);
+    double f_bg = clamp(1.0 - f_sca - f_shade, eps, 1.0 - eps);
+    double s = f_sca + f_shade + f_bg;
+    f_sca /= s; f_shade /= s; f_bg /= s;
+    double z_snow = std::log(f_sca / f_bg);
+    double z_shade = std::log(f_shade / f_bg);
+    return {z_snow, z_shade, x[2], x[3]};
+}
+
+
+double spectrum_difference_softmax(const std::vector<double>& z,
+                                   double* spectrum_background, int len_background,
+                                   double* spectrum_target, int len_target,
+                                   double* spectrum_shade, int len_shade,
+                                   double solar_angle,
+                                   double* bands, int len_bands,
+                                   double* solar_angles, int len_solar_angles,
+                                   double* dust_concentrations, int len_dust_concentrations,
+                                   double* grain_sizes, int len_grain_sizes,
+                                   double* lut, int n_bands, int n_solar_angles, int n_dust_concentrations, int n_grain_sizes) {
+    /*
+    Spectral-difference cost in unconstrained (softmax-reparameterized)
+    coordinates. Unconstrained solvers (Nelder-Mead, BOBYQA, BFGS) can be used
+    directly because the simplex and box constraints are absorbed into the
+    transformation z -> x.
+    */
+    double f_sca, f_shade, f_bg;
+    softmax_to_fractions(z[0], z[1], f_sca, f_shade, f_bg);
+
+    double dust_min = dust_concentrations[0];
+    double dust_max = dust_concentrations[len_dust_concentrations - 1];
+    double grain_min = grain_sizes[0];
+    double grain_max = grain_sizes[len_grain_sizes - 1];
+    double dust = sigmoid_to_bounded(z[2], dust_min, dust_max);
+    double grain = sigmoid_to_bounded(z[3], grain_min, grain_max);
+
+    double solar_angle_idx = get_idx(solar_angle, solar_angles, len_solar_angles);
+    double dust_idx = get_idx(dust, dust_concentrations, len_dust_concentrations);
+    double grain_idx = get_idx(grain, grain_sizes, len_grain_sizes);
+
+    double diff_sq = 0.0;
+    for (int i = 0; i < len_target; ++i) {
+        double model_pure = interpolate_idx(lut, n_bands, n_solar_angles, n_dust_concentrations, n_grain_sizes,
+                                            i, solar_angle_idx, dust_idx, grain_idx);
+        double model = model_pure * f_sca + spectrum_shade[i] * f_shade + spectrum_background[i] * f_bg;
+        double d = spectrum_target[i] - model;
+        diff_sq += d * d;
+    }
+    return std::sqrt(diff_sq);
+}
+
+
 double index_to_value(double value, double* coords, int len_coords) {
     // value in [0, 1] mapped to coords[0] ... coords[len-1].
     // Previous version used `idx = value * len_coords` which read past the end
@@ -303,6 +502,36 @@ static double spectrum_difference_wrapper(const std::vector<double>& x, std::vec
 }
 
 
+static double spectrum_difference_softmax_wrapper(const std::vector<double>& z, std::vector<double>& /*grad*/, void* data) {
+    ObjectiveData* d = reinterpret_cast<ObjectiveData*>(data);
+    return spectrum_difference_softmax(z,
+                                       d->spectrum_background, d->len_background,
+                                       d->spectrum_target, d->len_target,
+                                       d->spectrum_shade, d->len_shade,
+                                       d->solar_angle,
+                                       d->bands, d->len_bands,
+                                       d->solar_angles, d->len_solar_angles,
+                                       d->dust_concentrations, d->len_dust_concentrations,
+                                       d->grain_sizes, d->len_grain_sizes,
+                                       d->lut, d->n_bands, d->n_solar_angles, d->n_dust_concentrations, d->n_grain_sizes);
+}
+
+
+static double spectrum_difference_hybrid_wrapper(const std::vector<double>& y, std::vector<double>& /*grad*/, void* data) {
+    ObjectiveData* d = reinterpret_cast<ObjectiveData*>(data);
+    return spectrum_difference_hybrid(y,
+                                      d->spectrum_background, d->len_background,
+                                      d->spectrum_target, d->len_target,
+                                      d->spectrum_shade, d->len_shade,
+                                      d->solar_angle,
+                                      d->bands, d->len_bands,
+                                      d->solar_angles, d->len_solar_angles,
+                                      d->dust_concentrations, d->len_dust_concentrations,
+                                      d->grain_sizes, d->len_grain_sizes,
+                                      d->lut, d->n_bands, d->n_solar_angles, d->n_dust_concentrations, d->n_grain_sizes);
+}
+
+
 static double constraint(const std::vector<double>& x, std::vector<double>& /*grad*/, void* /*data*/) {
     // f_sca + f_shade <= 1, written as f_sca + f_shade - 1 <= 0
     return x[0] + x[1] - 1;
@@ -347,7 +576,9 @@ std::vector<double> invert(double* spectrum_background, int len_background,
     };
 
     nlopt::opt opt;
-    bool constrained_algorithm;
+    bool constrained_algorithm = false;
+    bool softmax_algorithm = false;
+    bool hybrid_algorithm = false;
 
     switch (algorithm) {
     case 1: {
@@ -370,20 +601,98 @@ std::vector<double> invert(double* spectrum_background, int len_background,
         opt = nlopt::opt(nlopt::LD_SLSQP, 4);
         constrained_algorithm = true;
         break;
+    case 4:
+        // LN_NELDERMEAD on softmax-reparameterized problem. Unconstrained:
+        // no bounds, no inequality constraint — simplex and box constraints
+        // are absorbed into the z -> x transformation.
+        opt = nlopt::opt(nlopt::LN_NELDERMEAD, 4);
+        softmax_algorithm = true;
+        break;
+    case 5:
+        // LN_BOBYQA on softmax. Often faster than Nelder-Mead on smooth
+        // objectives — uses a quadratic model rather than simplex reflections.
+        opt = nlopt::opt(nlopt::LN_BOBYQA, 4);
+        softmax_algorithm = true;
+        break;
+    case 6:
+        // LN_NELDERMEAD on hybrid: softmax for fractions, clip-on-entry for
+        // dust/grain. The clip turns the LUT bounds into a true wall in the
+        // objective (flat plateau outside), avoiding the asymptotic drift that
+        // the full sigmoid suffers. Recommended for use on real imagery.
+        opt = nlopt::opt(nlopt::LN_NELDERMEAD, 4);
+        hybrid_algorithm = true;
+        break;
     default:
-        throw std::invalid_argument("invert: unknown algorithm code (must be 1=COBYLA, 2=NELDERMEAD, 3=SLSQP)");
+        throw std::invalid_argument("invert: unknown algorithm code "
+            "(1=COBYLA, 2=NELDERMEAD, 3=SLSQP, "
+            "4=NELDERMEAD-softmax, 5=BOBYQA-softmax, 6=NELDERMEAD-hybrid)");
     }
-
-    if (constrained_algorithm) {
-        opt.add_inequality_constraint(constraint, &obj_data);
-    }
-    opt.set_min_objective(spectrum_difference_wrapper, &obj_data);
-    opt.set_maxeval(max_eval);
 
     double min_dust_concentration = dust_concentrations[0];
     double max_dust_concentration = dust_concentrations[len_dust_concentrations - 1];
     double min_grain_size = grain_sizes[0];
     double max_grain_size = grain_sizes[len_grain_sizes - 1];
+
+    if (softmax_algorithm) {
+        // Unconstrained path: objective is the softmax cost; no bounds; seed
+        // from x0 by inverting the reparameterization.
+        //
+        // Tolerances are set in z-space, which has different scale from x-space:
+        //  - Each unit step in z_snow / z_shade roughly doubles/halves a softmax
+        //    fraction; each unit in z_dust / z_grain moves the bounded variable
+        //    through ~1/4 of its range. So an initial step of ~0.5 is roughly
+        //    equivalent to COBYLA's rhobeg=(0.1, 0.1, 100, 100) in x-space.
+        //  - xtol_abs of 1e-3 in z corresponds to ~0.05% movement in any
+        //    fraction or bounded var. Tighter than the constrained path's
+        //    xtol_rel=1e-2 because BOBYQA otherwise stops prematurely.
+        opt.set_min_objective(spectrum_difference_softmax_wrapper, &obj_data);
+        opt.set_maxeval(max_eval);
+        opt.set_ftol_abs(1e-6);
+        opt.set_xtol_abs(1e-3);
+        opt.set_initial_step(std::vector<double>{0.5, 0.5, 0.5, 0.5});
+
+        std::vector<double> z = x_to_z(x0,
+                                       min_dust_concentration, max_dust_concentration,
+                                       min_grain_size, max_grain_size);
+        double minf;
+        opt.optimize(z, minf);
+        return z_to_x(z,
+                      min_dust_concentration, max_dust_concentration,
+                      min_grain_size, max_grain_size);
+    }
+
+    if (hybrid_algorithm) {
+        // Hybrid path: softmax-reparameterized fractions (z_snow, z_shade) but
+        // dust/grain stay in physical units, clipped inside the objective. No
+        // NLopt bounds — the clip turns the LUT bound into a flat plateau
+        // that the simplex contracts against, terminating cleanly.
+        //
+        // Initial step: z-space scale (~0.5) for fractions, physical units
+        // (~100) for dust/grain — matches COBYLA's rhobeg on the latter two.
+        opt.set_min_objective(spectrum_difference_hybrid_wrapper, &obj_data);
+        opt.set_maxeval(max_eval);
+        opt.set_ftol_abs(1e-4);
+        opt.set_xtol_rel(1e-2);
+        opt.set_initial_step(std::vector<double>{0.5, 0.5, 100.0, 100.0});
+
+        std::vector<double> y = x_to_y_hybrid(x0);
+        double minf;
+        opt.optimize(y, minf);
+        std::vector<double> x = y_to_x_hybrid(y);
+        // Clamp dust/grain to LUT range on output — the optimizer's working
+        // value can be outside if the plateau pushed it there; the user-
+        // facing answer must stay physical.
+        x[2] = std::min(std::max(x[2], min_dust_concentration), max_dust_concentration);
+        x[3] = std::min(std::max(x[3], min_grain_size), max_grain_size);
+        return x;
+    }
+
+    // Constrained / bounded path (algorithms 1-3).
+    if (constrained_algorithm) {
+        opt.add_inequality_constraint(constraint, &obj_data);
+    }
+    opt.set_min_objective(spectrum_difference_wrapper, &obj_data);
+    opt.set_maxeval(max_eval);
 
     std::vector<double> lower_bounds = {0.0, 0.0, min_dust_concentration, min_grain_size};
     std::vector<double> upper_bounds = {1.0, 1.0, max_dust_concentration, max_grain_size};
