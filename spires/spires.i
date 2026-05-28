@@ -5,6 +5,20 @@
   #include "spires.h"
   #include <vector>
   #include <string>
+  #include <exception>
+
+  /* RAII guard that releases the Python GIL on construction and restores it on
+     destruction. Exception-safe: if the wrapped C++ code throws (e.g. NLopt),
+     the destructor reacquires the GIL before the SWIG exception machinery
+     converts it to a Python exception. */
+  class SpiresGILRelease {
+      PyThreadState* _save;
+  public:
+      SpiresGILRelease() : _save(PyEval_SaveThread()) {}
+      ~SpiresGILRelease() { PyEval_RestoreThread(_save); }
+      SpiresGILRelease(const SpiresGILRelease&) = delete;
+      SpiresGILRelease& operator=(const SpiresGILRelease&) = delete;
+  };
 %}
 
 %include "numpy.i"
@@ -58,10 +72,68 @@ namespace std {
     (double* results, int n_y, int n_x, int n_results)
 }
 
+/* Output typemap for `double*` returns from interpolate_all_array.
+   Length is taken from `arg2` (n_bands), which is set by the IN_ARRAY4
+   typemap on the `lut` argument. The returned buffer was allocated with
+   `new double[n_bands]` in C++, so we transfer ownership to NumPy by
+   wrapping it in a PyCapsule with a `delete[]` destructor and using that
+   capsule as the array's base — this guarantees the buffer is freed when
+   the NumPy array is deallocated, fixing the previous leak. */
 %typemap(out) double* {
-    // Convert the returned pointer to a NumPy array
-    npy_intp dims[1] = {9};  // Define the dimensions of the array
-    $result = PyArray_SimpleNewFromData(1, dims, NPY_DOUBLE, (void*)$1);
+    npy_intp dims[1] = { (npy_intp)arg2 };
+    PyObject* arr = PyArray_SimpleNewFromData(1, dims, NPY_DOUBLE, (void*)$1);
+    if (!arr) {
+        delete[] $1;
+        SWIG_fail;
+    }
+    PyObject* capsule = PyCapsule_New((void*)$1, NULL,
+        [](PyObject* cap) {
+            void* p = PyCapsule_GetPointer(cap, NULL);
+            delete[] static_cast<double*>(p);
+        });
+    if (!capsule) {
+        Py_DECREF(arr);
+        delete[] $1;
+        SWIG_fail;
+    }
+    if (PyArray_SetBaseObject((PyArrayObject*)arr, capsule) < 0) {
+        Py_DECREF(arr);  // PyArray_SetBaseObject steals capsule ref on failure? No — on failure we still own capsule.
+        Py_DECREF(capsule);
+        SWIG_fail;
+    }
+    $result = arr;
+}
+
+/* Release the GIL during the long-running NLopt-driven inversions so that
+   Python threads (e.g. Dask threaded workers) can run other work in parallel
+   on the same process. Argument extraction (input typemaps) runs before the
+   try-block with the GIL held; only the bare C++ call ($action) is GIL-free.
+   Output typemaps run after the guard is destroyed, with the GIL re-held. */
+%exception invert {
+    try {
+        SpiresGILRelease _gil;
+        $action
+    } catch (const std::exception& e) {
+        SWIG_exception(SWIG_RuntimeError, e.what());
+    }
+}
+
+%exception invert_array1d {
+    try {
+        SpiresGILRelease _gil;
+        $action
+    } catch (const std::exception& e) {
+        SWIG_exception(SWIG_RuntimeError, e.what());
+    }
+}
+
+%exception invert_array2d {
+    try {
+        SpiresGILRelease _gil;
+        $action
+    } catch (const std::exception& e) {
+        SWIG_exception(SWIG_RuntimeError, e.what());
+    }
 }
 
 

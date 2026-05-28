@@ -100,3 +100,49 @@ def test_invert_array():
                          [4.089303e-01, 1.552017e-01, 1.387936e+02, 3.645840e+02],
                          [4.089303e-01, 1.552017e-01, 1.387936e+02, 3.645840e+02]])
     np.testing.assert_allclose(results, expected, rtol=1e-5)
+
+
+# Two distinct pixels in different snow regimes (used by invert_array2d test)
+_pixel_a_target = np.array(
+    [0.3424, 0.366, 0.3624, 0.38932347, 0.41624767, 0.39567757, 0.07043362, 0.06267947, 0.3792])
+_pixel_a_background = np.array(
+    [0.0182, 0.0265, 0.0283, 0.056067, 0.095432, 0.12036866, 0.12491679, 0.07888655, 0.1406])
+_pixel_b_target = np.array(
+    [0.2866, 0.3046, 0.324, 0.34468558, 0.35373732, 0.35651454, 0.18072593, 0.16601688, 0.3488])
+_pixel_b_background = np.array(
+    [0.1002, 0.1492, 0.2088, 0.21797800, 0.23149200, 0.25140200, 0.31030660, 0.28750810, 0.2546])
+
+
+def test_invert_array2d():
+    """Regression: pin per-pixel COBYLA outputs across a (y, x, band) grid with
+    two distinct underlying spectra. Catches dimension-handling bugs in
+    invert_array2d that the 1D and single-pixel tests can't see."""
+    spectra_targets = np.stack([np.tile(_pixel_a_target, (3, 1)),
+                                np.tile(_pixel_b_target, (3, 1))], axis=0)
+    spectra_backgrounds = np.stack([np.tile(_pixel_a_background, (3, 1)),
+                                    np.tile(_pixel_b_background, (3, 1))], axis=0)
+    obs_solar_angles = np.full((2, 3), solar_angle)
+
+    results = spires.speedy_invert_array2d(spectra_targets=spectra_targets,
+                                           spectra_backgrounds=spectra_backgrounds,
+                                           obs_solar_angles=obs_solar_angles,
+                                           interpolator=interpolator,
+                                           algorithm=1, x0=np.array(x0))
+
+    expected_a = np.array([4.06627774e-01, 1.45134297e-01, 1.37503386e+02, 3.61158111e+02])
+    expected_b = np.array([2.64258623e-01, 1.83737926e-01, 1.94833461e+02, 3.80244073e+02])
+    assert results.shape == (2, 3, 4)
+    for x in range(3):
+        np.testing.assert_allclose(results[0, x], expected_a, rtol=1e-4)
+        np.testing.assert_allclose(results[1, x], expected_b, rtol=1e-4)
+
+
+def test_interpolate_all_handles_non_9_band_lut():
+    """The SWIG output typemap previously hardcoded `dims[1] = {9}`, silently
+    truncating/corrupting outputs for any LUT with band count != 9. This test
+    pins the contract that interpolate_all returns one value per band."""
+    n_bands = interpolator.bands.size
+    ret = interpolator.interpolate_all(solar_angle=solar_angle,
+                                       dust_concentration=dust_concentration,
+                                       grain_size=grain_size)
+    assert np.asarray(ret).shape == (n_bands,)

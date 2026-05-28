@@ -360,280 +360,6 @@ def speedy_invert_xarray(spectra_targets, spectra_backgrounds, obs_solar_angles,
     return results
 
 
-def speedy_invert_dask(spectra_targets, spectra_backgrounds, obs_solar_angles,
-                       interpolator, spectrum_shade=None, max_eval=100,
-                       x0=np.array([0.5, 0.05, 10, 250]), algorithm=2,
-                       client=None, scatter_lut=True):
-    """
-    Parallel inversion of snow reflectance spectra using Dask and xarray.
-
-    This method enables distributed processing of large satellite imagery datasets
-    by leveraging Dask's parallel computation capabilities through xarray.apply_ufunc.
-    It's particularly useful for processing time series of satellite imagery where
-    the data is too large to fit in memory.
-
-    Parameters
-    ----------
-    spectra_targets : xarray.DataArray
-        Mixed spectra to invert. Must have a 'band' dimension and can have
-        any combination of spatial (x, y) and temporal (time) dimensions.
-        Shape: (time, y, x, band) or (y, x, band).
-    spectra_backgrounds : xarray.DataArray
-        Background (snow-free, R_0) spectra with same dimensions as targets
-        except potentially missing the time dimension if using static backgrounds.
-        Shape: (y, x, band).
-    obs_solar_angles : xarray.DataArray
-        Solar zenith angles (degrees) for each observation.
-        Shape: (time, y, x) or (y, x).
-    interpolator : spires.interpolator.LutInterpolator
-        Lookup table interpolator object containing reflectance data
-        and coordinate arrays (bands, solar_angles, dust_concentrations, grain_sizes).
-    spectrum_shade : numpy.ndarray, optional
-        1D array representing the ideal shaded spectrum.
-        Must have same length as number of bands. If None, uses zeros (default: None).
-    max_eval : int, optional
-        Maximum number of optimization iterations per pixel (default: 100).
-    x0 : array-like, optional
-        Initial guess: [fsca, fshade, dust_conc (ppm), grain_size (μm)].
-        Default: [0.5, 0.05, 10, 250].
-    algorithm : int, optional
-        NLopt algorithm code:
-        - 0: LN_NELDERMEAD
-        - 1: LN_SBPLX
-        - 2: LN_COBYLA (default, recommended)
-        - 3: LN_NEWUOA
-        - 4: LN_NEWUOA_BOUND
-        - 5: LN_BOBYQA
-        - 6: LN_PRAXIS
-        - 7: LD_MMA
-        - 8: LD_SLSQP (not working in C++)
-        - 9: LD_LBFGS
-    client : dask.distributed.Client, optional
-        Dask client for distributed computation. If None, uses default scheduler.
-    scatter_lut : bool, optional
-        Whether to scatter (broadcast) the LUT to all workers for faster access.
-        Recommended for large LUTs that will be reused many times (default: True).
-
-    Returns
-    -------
-    xarray.Dataset
-        Dataset containing inversion results with variables:
-        - fsca : Fractional snow-covered area (0-1)
-        - fshade : Fractional shaded area (0-1)
-        - dust_concentration : Dust concentration in snow (ppm)
-        - grain_size : Effective snow grain radius (μm)
-
-        Preserves all input coordinates and dimensions.
-
-    Examples
-    --------
-    >>> import spires
-    >>> import xarray as xr
-    >>> from dask.distributed import Client
-    >>>
-    >>> # Load data
-    >>> ds = xr.open_zarr('sentinel2_data.zarr')
-    >>> ds_r0 = xr.open_zarr('background_reflectance.zarr')
-    >>>
-    >>> # Setup Dask client for parallel processing
-    >>> client = Client(n_workers=4, threads_per_worker=2)
-    >>>
-    >>> # Load LUT
-    >>> lut = spires.LutInterpolator('sentinel2_lut.mat')
-    >>>
-    >>> # Run parallel inversion
-    >>> results = spires.speedy_invert_dask(
-    ...     spectra_targets=ds['reflectance'],
-    ...     spectra_backgrounds=ds_r0['reflectance'],
-    ...     obs_solar_angles=ds['sun_zenith'],
-    ...     interpolator=lut,
-    ...     client=client
-    ... )
-    >>>
-    >>> # Compute results (triggers actual computation)
-    >>> results = results.compute()
-
-    Notes
-    -----
-    - Input data should be chunked appropriately for your system's memory.
-      Typical chunk sizes: {'time': 1, 'y': 256, 'x': 256, 'band': -1}
-    - The 'band' dimension should not be chunked (use band=-1) as the
-      inversion operates on full spectra.
-    - For time series processing, chunking by time=1 enables parallel
-      processing across time steps.
-    - Performance scales with number of workers and chunk size.
-    - Consider using persist() on frequently accessed data.
-
-    See Also
-    --------
-    speedy_invert_xarray : Non-parallel xarray version
-    speedy_invert_array2d : Core 2D array inversion function
-    """
-    import xarray
-
-    # Handle optional imports
-    try:
-        import dask
-        import dask.array
-        from dask.distributed import Client
-    except ImportError:
-        raise ImportError(
-            "Dask is required for parallel processing. "
-            "Install with: conda install -c conda-forge dask distributed"
-        )
-
-    # Ensure we have a client
-    if client is None:
-        try:
-            # Try to get existing client
-            client = Client.current()
-        except ValueError:
-            # No client exists, will use default sched
-            # uler
-            pass
-
-    # Handle spectrum_shade
-    if spectrum_shade is None:
-        spectrum_shade = np.zeros(len(interpolator.bands))
-
-    # Scatter LUT to workers if requested and client exists
-    if scatter_lut and client is not None:
-        # Convert LUT reflectances to dask array and scatter
-        reflectances_da = dask.array.from_array(interpolator.reflectances)
-        scattered = client.scatter(dict(reflectances_da.dask), broadcast=True)
-        reflectances_scattered = dask.array.Array(
-            scattered,
-            name=reflectances_da.name,
-            chunks=reflectances_da.chunks,
-            dtype=reflectances_da.dtype,
-            meta=reflectances_da._meta,
-            shape=reflectances_da.shape
-        )
-    else:
-        reflectances_scattered = interpolator.reflectances
-
-    # Define the wrapper function for apply_ufunc
-    def _invert_wrapper(spectra_targets, spectra_backgrounds, obs_solar_angles,
-                       bands, solar_angles, dust, grain, reflectances):
-        """Internal wrapper for speedy_invert_array2d."""
-        # Handle potential time dimension
-        if spectra_targets.ndim == 4:  # Has time dimension
-            # Process each time step
-            n_time = spectra_targets.shape[0]
-            results = np.empty((n_time,) + spectra_targets.shape[1:3] + (4,))
-            for t in range(n_time):
-                results[t] = speedy_invert_array2d(
-                    spectra_targets=spectra_targets[t],
-                    spectra_backgrounds=spectra_backgrounds,
-                    obs_solar_angles=obs_solar_angles[t],
-                    spectrum_shade=spectrum_shade,
-                    bands=bands,
-                    solar_angles=solar_angles,
-                    dust_concentrations=dust,
-                    grain_sizes=grain,
-                    reflectances=reflectances,
-                    max_eval=max_eval,
-                    x0=x0,
-                    algorithm=algorithm
-                )
-        else:  # No time dimension
-            results = speedy_invert_array2d(
-                spectra_targets=spectra_targets,
-                spectra_backgrounds=spectra_backgrounds,
-                obs_solar_angles=obs_solar_angles,
-                spectrum_shade=spectrum_shade,
-                bands=bands,
-                solar_angles=solar_angles,
-                dust_concentrations=dust,
-                grain_sizes=grain,
-                reflectances=reflectances,
-                max_eval=max_eval,
-                x0=x0,
-                algorithm=algorithm
-            )
-        return results
-
-    # Determine input core dimensions based on data structure
-    has_time = 'time' in spectra_targets.dims
-
-    if has_time:
-        # Time-varying data
-        target_core_dims = ['band']
-        background_core_dims = ['band']
-        angle_core_dims = []
-        output_core_dims = [['property']]
-    else:
-        # Static data
-        target_core_dims = ['band']
-        background_core_dims = ['band']
-        angle_core_dims = []
-        output_core_dims = [['property']]
-
-    # Apply parallel inversion using xarray.apply_ufunc
-    results = xarray.apply_ufunc(
-        _invert_wrapper,
-        spectra_targets,
-        spectra_backgrounds,
-        obs_solar_angles,
-        interpolator.bands,
-        interpolator.solar_angles,
-        interpolator.dust_concentrations,
-        interpolator.grain_sizes,
-        reflectances_scattered,
-        dask='parallelized',
-        input_core_dims=[
-            target_core_dims,      # spectra_targets
-            background_core_dims,  # spectra_backgrounds
-            angle_core_dims,       # obs_solar_angles
-            ['bands'],             # bands
-            ['sz'],                # solar_angles
-            ['dust'],              # dust_concentrations
-            ['grain'],             # grain_sizes
-            ['bands', 'sz', 'dust', 'grain']  # reflectances
-        ],
-        output_core_dims=output_core_dims,
-        output_dtypes=[np.float32],
-        dask_gufunc_kwargs={
-            'allow_rechunk': False,
-            'output_sizes': {'property': 4}
-        },
-        vectorize=False
-    )
-
-    # Convert to Dataset with named variables
-    results = results.to_dataset(dim='property')
-    results = results.rename({
-        0: 'fsca',
-        1: 'fshade',
-        2: 'dust_concentration',
-        3: 'grain_size'
-    })
-
-    # Add metadata
-    results['fsca'].attrs = {
-        'long_name': 'Fractional Snow-Covered Area',
-        'units': '1',
-        'valid_range': [0, 1]
-    }
-    results['fshade'].attrs = {
-        'long_name': 'Fractional Shaded Area',
-        'units': '1',
-        'valid_range': [0, 1]
-    }
-    results['dust_concentration'].attrs = {
-        'long_name': 'Dust Concentration in Snow',
-        'units': 'ppm',
-        'valid_range': [0, 10000]
-    }
-    results['grain_size'].attrs = {
-        'long_name': 'Effective Snow Grain Radius',
-        'units': 'μm',
-        'valid_range': [10, 2000]
-    }
-
-    return results
-
-
 def snow_diff_4(x, spectrum_target, spectrum_background, solar_angle, interpolator, shade):
     r"""
     Calculate spectral difference for 4-parameter snow model.
@@ -772,6 +498,115 @@ def snow_diff_3(x, spectrum_target, solar_angle, interpolator, shade):
     model_reflectances = model_reflectances * x[0] + shade * (1 - x[0])
     distance = np.linalg.norm(spectrum_target - model_reflectances)
     return distance
+
+
+def _x_to_z(x, dust_min, dust_max, grain_min, grain_max, eps=1e-6):
+    """Inverse of the softmax/sigmoid reparameterization. Used to seed z0 from a
+    physical x0 = [f_sca, f_shade, dust, grain]."""
+    f_sca = float(np.clip(x[0], eps, 1 - eps))
+    f_shade = float(np.clip(x[1], eps, 1 - eps))
+    f_bg = float(np.clip(1.0 - f_sca - f_shade, eps, 1 - eps))
+    z_snow = np.log(f_sca / f_bg)
+    z_shade = np.log(f_shade / f_bg)
+
+    u_d = np.clip((x[2] - dust_min) / (dust_max - dust_min), eps, 1 - eps)
+    u_g = np.clip((x[3] - grain_min) / (grain_max - grain_min), eps, 1 - eps)
+    z_dust = np.log(u_d / (1 - u_d))
+    z_grain = np.log(u_g / (1 - u_g))
+    return np.array([z_snow, z_shade, z_dust, z_grain])
+
+
+def snow_diff_softmax(z, spectrum_target, spectrum_background, solar_angle, interpolator, shade,
+                      dust_min, dust_max, grain_min, grain_max):
+    r"""
+    Spectral-difference cost in unconstrained (softmax-reparameterized) coordinates.
+
+    Maps an unconstrained vector ``z = [z_snow, z_shade, z_dust, z_grain]`` to physical
+    parameters such that the simplex constraints (f_sca, f_shade, f_bg ≥ 0,
+    f_sca + f_shade + f_bg = 1) and the box bounds on dust/grain are satisfied by
+    construction. This lets unconstrained solvers (Nelder-Mead, L-BFGS-B, BFGS) replace
+    COBYLA / SLSQP on the fractional sub-problem.
+
+    Reparameterization
+    ------------------
+    Fractions via softmax with z_bg pinned to 0 (gauge fix):
+
+    .. math::
+        (f_{sca}, f_{shade}, f_{bg}) = \mathrm{softmax}(z_{snow}, z_{shade}, 0)
+
+    Dust and grain via sigmoid-scaled-to-bounds:
+
+    .. math::
+        d = d_{min} + (d_{max} - d_{min})\,\sigma(z_{dust}),\quad
+        g = g_{min} + (g_{max} - g_{min})\,\sigma(z_{grain})
+
+    The cost itself is the same Euclidean distance as :func:`snow_diff_4`.
+    """
+    e = np.exp(np.array([z[0], z[1], 0.0]) - max(z[0], z[1], 0.0))
+    f_sca, f_shade, f_bg = e / e.sum()
+
+    dust = dust_min + (dust_max - dust_min) / (1.0 + np.exp(-z[2]))
+    grain = grain_min + (grain_max - grain_min) / (1.0 + np.exp(-z[3]))
+
+    model_reflectances = interpolator.interpolate_all(solar_angle=solar_angle,
+                                                      dust_concentration=dust,
+                                                      grain_size=grain)
+    model_reflectances = model_reflectances * f_sca + shade * f_shade + spectrum_background * f_bg
+    return np.linalg.norm(spectrum_target - model_reflectances)
+
+
+def speedy_invert_scipy_softmax(interpolator: spires.interpolator.LutInterpolator,
+                                spectrum_target, spectrum_background, solar_angle,
+                                shade=None, scipy_options=None, method='Nelder-Mead', z0=None):
+    """
+    Unconstrained scipy inversion via softmax reparameterization.
+
+    Drops the inequality constraint ``1 - f_sca - f_shade ≥ 0`` and the box bounds by
+    optimizing in an unconstrained space (see :func:`snow_diff_softmax`). Returns the
+    same ``(res, model_refl)`` shape as :func:`speedy_invert_scipy`, with
+    ``res.x = [f_sca, f_shade, dust, grain]`` in physical units.
+
+    Parameters
+    ----------
+    method : str, optional
+        Any unconstrained scipy method ('Nelder-Mead', 'BFGS', 'L-BFGS-B', 'Powell').
+        Default 'Nelder-Mead'.
+    z0 : array-like, optional
+        Initial guess in z-space (length 4). If None, defaults to zeros, which
+        corresponds to f = (1/3, 1/3, 1/3) and dust/grain at the bounds midpoint.
+    """
+    if shade is None:
+        shade = np.zeros_like(spectrum_target)
+    if scipy_options is None:
+        scipy_options = {'disp': False, 'maxiter': 1000}
+
+    dust_min = float(interpolator.dust_concentrations.min())
+    dust_max = float(interpolator.dust_concentrations.max())
+    grain_min = float(interpolator.grain_sizes.min())
+    grain_max = float(interpolator.grain_sizes.max())
+
+    if z0 is None:
+        # Default physical guess: f_sca=0.5, f_shade=0.05, dust=10, grain=250
+        # Map to z-space: z_bg pinned to 0, sigmoid logit for bounded params.
+        z0 = _x_to_z(np.array([0.5, 0.05, 10.0, 250.0]),
+                    dust_min, dust_max, grain_min, grain_max)
+
+    res = scipy.optimize.minimize(
+        snow_diff_softmax, z0, method=method, options=scipy_options,
+        args=(spectrum_target, spectrum_background, solar_angle, interpolator, shade,
+              dust_min, dust_max, grain_min, grain_max),
+    )
+
+    z = res.x
+    e = np.exp(np.array([z[0], z[1], 0.0]) - max(z[0], z[1], 0.0))
+    f_sca, f_shade, _ = e / e.sum()
+    dust = dust_min + (dust_max - dust_min) / (1.0 + np.exp(-z[2]))
+    grain = grain_min + (grain_max - grain_min) / (1.0 + np.exp(-z[3]))
+    res.x = np.array([f_sca, f_shade, dust, grain])
+
+    model_refl = interpolator.interpolate_all(solar_angle=solar_angle,
+                                              dust_concentration=dust, grain_size=grain)
+    return res, model_refl
 
 
 def speedy_invert_scipy(interpolator: spires.interpolator.LutInterpolator, spectrum_target, spectrum_background,
