@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 
 [project]
-name = "spires"
+name = "spires-inversion"
 description = "Python implementation of SPIRES (SPectral Inversion of REflectance from Snow) for retrieving snow properties from satellite imagery"
 authors = [
     { name = "Ned Bair", email = "edwardbair@ucsb.edu" },
@@ -41,11 +41,11 @@ dynamic = ["version"]  # This tells the backend to get version from setuptools_s
 
 
 [project.urls]
-Homepage = "https://github.com/NiklasPhabian/SpiPy"
-Documentation = "https://spipy.readthedocs.io"
-Repository = "https://github.com/NiklasPhabian/SpiPy"
-"Bug Tracker" = "https://github.com/NiklasPhabian/SpiPy/issues"
-Changelog = "https://github.com/NiklasPhabian/SpiPy/releases"
+Homepage = "https://github.com/SPIReS-Organization/spires-inversion"
+Documentation = "https://spires-inversion.readthedocs.io"
+Repository = "https://github.com/SPIReS-Organization/spires-inversion"
+"Bug Tracker" = "https://github.com/SPIReS-Organization/spires-inversion/issues"
+Changelog = "https://github.com/SPIReS-Organization/spires-inversion/releases"
 
 
 [project.optional-dependencies]
@@ -83,12 +83,12 @@ exclude = ["tests*", "tests.*"]
 [tool.pytest.ini_options]
 # Only collect tests from these directories
 testpaths = ["tests"]
-# Add spires to python path to avoid import mismatches
+# Add spires_inversion to python path to avoid import mismatches
 pythonpath = ["."]
 # Don't collect from examples (they require optional dependencies)
 norecursedirs = ["examples", "doc", "build", "dist", ".git", ".tox"]
-# Collect doctests from spires package
-addopts = "--doctest-modules --ignore=tests/example.py --ignore=spires/reprojectMODIS.py"
+# Collect doctests from spires_inversion package
+addopts = "--doctest-modules --ignore=tests/example.py --ignore=spires_inversion/reprojectMODIS.py"
 # Configure doctest behavior
 doctest_optionflags = ["NORMALIZE_WHITESPACE", "ELLIPSIS"]
 # Only collect test files matching these patterns

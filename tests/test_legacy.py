@@ -1,6 +1,6 @@
 import numpy
 import numpy as np
-import spires
+import spires_inversion
 
 # R is 7 band spectra for the 2 pixels
 R = np.array([[0.8203, 0.6796, 0.8076, 0.8361, 0.1879, 0.0321, 0.0144],
@@ -23,13 +23,13 @@ solarZ = np.array([24.0, 24.71])
 shade = np.zeros(len(R[0]))
 
 
-F = spires.legacy.load_lut('tests/data/LUT_MODIS.mat')
+F = spires_inversion.legacy.load_lut('tests/data/LUT_MODIS.mat')
 
 
 def test_lookup():
     i_pixel = 0
     mode = 4
-    res, model_refl = spires.legacy.speedy_invert(f=F,
+    res, model_refl = spires_inversion.legacy.speedy_invert(f=F,
                                                   spectrum_target=R[i_pixel],
                                                   spectrum_background=R0[i_pixel],
                                                   solar_angle=solarZ[i_pixel],

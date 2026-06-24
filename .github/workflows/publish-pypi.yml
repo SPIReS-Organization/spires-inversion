@@ -47,7 +47,7 @@ jobs:
         CIBW_REPAIR_WHEEL_COMMAND_LINUX: "auditwheel repair -w {dest_dir} {wheel} --plat manylinux_2_28_x86_64"
         CIBW_REPAIR_WHEEL_COMMAND_MACOS: "delocate-wheel --require-archs {delocate_archs} -w {dest_dir} -v {wheel}"
         # Skip wheel test for now - SWIG module import needs investigation
-        # CIBW_TEST_COMMAND: python -c "import spires; print(spires.__version__)"
+        # CIBW_TEST_COMMAND: python -c "import spires_inversion; print(spires_inversion.__version__)"
         # CIBW_TEST_REQUIRES: pytest
         # Build verbosely
         CIBW_BUILD_VERBOSITY: 1

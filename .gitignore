@@ -2,12 +2,12 @@ __pycache__/
 *.ipynb_checkpoints*
 *.egg-info*
 /build
-/spires/spires_wrap.cpp
-/spires/_core.cpython*
-/spires/core.py
+/spires_inversion/spires_wrap.cpp
+/spires_inversion/_core.cpython*
+/spires_inversion/core.py
 /doc/build/
 /venv/
-/spires/.vscode/
+/spires_inversion/.vscode/
 /dist/
 *.DS_Store
 *.aux.xml

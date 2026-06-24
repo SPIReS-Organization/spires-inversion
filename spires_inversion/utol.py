@@ -79,13 +79,13 @@ def uniquetol_1d(array, tol=1e-3):
 
     Examples
     ----------
-    >>> import spires.utol
+    >>> import spires_inversion.utol
     >>> array = np.array([[0.3696, 0.3844, 0.3676],
     ...                   [0.3312, 0.3452, 0.3444],
     ...                   [0.3228, 0.346 , 0.3272],
     ...                   [0.3067, 0.3163, 0.3162],
     ...                   [0.3068, 0.3164, 0.3164]])
-    >>> unique, labels = spires.utol.uniquetol_1d(array, tol=1e-2)
+    >>> unique, labels = spires_inversion.utol.uniquetol_1d(array, tol=1e-2)
     >>> labels
     array([2, 0, 1, 3, 3])
     """

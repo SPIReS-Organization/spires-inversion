@@ -1,12 +1,12 @@
 import numpy as np
 import pytest
 
-import spires
+import spires_inversion
 
 xr = pytest.importorskip("xarray")
 pytest.importorskip("dask")
 
-interpolator = spires.LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
+interpolator = spires_inversion.LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
 
 spectrum_target = np.array(
     [0.3424, 0.366, 0.3624, 0.38932347, 0.41624767, 0.39567757, 0.07043362, 0.06267947, 0.3792])
@@ -71,7 +71,7 @@ def _assert_pixels_match(ds, ny, nx, nt=None):
 
 def test_speedy_invert_dask_no_time():
     targets, backgrounds, angles = _make_inputs(ny=2, nx=3)
-    res = spires.speedy_invert_dask(
+    res = spires_inversion.speedy_invert_dask(
         targets, backgrounds, angles, interpolator,
         scatter_lut=False, algorithm=1)
     if hasattr(res, 'compute'):
@@ -81,7 +81,7 @@ def test_speedy_invert_dask_no_time():
 
 def test_speedy_invert_dask_with_time():
     targets, backgrounds, angles = _make_inputs(ny=2, nx=3, nt=2)
-    res = spires.speedy_invert_dask(
+    res = spires_inversion.speedy_invert_dask(
         targets, backgrounds, angles, interpolator,
         scatter_lut=False, algorithm=1)
     if hasattr(res, 'compute'):
@@ -92,7 +92,7 @@ def test_speedy_invert_dask_with_time():
 def test_speedy_invert_dask_chunked():
     chunks = {'y': 1, 'x': 2, 'band': -1}
     targets, backgrounds, angles = _make_inputs(ny=2, nx=3, chunks=chunks)
-    res = spires.speedy_invert_dask(
+    res = spires_inversion.speedy_invert_dask(
         targets, backgrounds, angles, interpolator,
         scatter_lut=False, algorithm=1)
     # Lazy result: chunked input should yield a dask-backed dataset.

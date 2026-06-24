@@ -1,6 +1,6 @@
 import numpy as np
 import netCDF4
-import spires.core
+import spires_inversion.core
 import scipy
 import xarray
 
@@ -23,10 +23,10 @@ def get_index(coordinates: np.array, value: float) -> float:
 
     Examples
     ---------
-    >>> import spires
+    >>> import spires_inversion
     >>> coordinates = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
     >>> value = 1.5
-    >>> index = spires.get_index(coordinates, value)
+    >>> index = spires_inversion.get_index(coordinates, value)
     >>> index == 1.5
     True
     """
@@ -259,8 +259,8 @@ class LutInterpolator:
 
         Examples
         --------
-        >>> import spires
-        >>> interpolator = spires.LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
+        >>> import spires_inversion
+        >>> interpolator = spires_inversion.LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
         >>> reflectance = interpolator.interpolate(band=1, solar_angle=0, dust_concentration=0.1, grain_size=30)
         >>> round(reflectance, 6)
         0.992369
@@ -269,7 +269,7 @@ class LutInterpolator:
         solar_idx = get_index(coordinates=self.solar_angles, value=solar_angle)
         dust_idx = get_index(coordinates=self.dust_concentrations, value=dust_concentration)
         grain_idx = get_index(coordinates=self.grain_sizes, value=grain_size)
-        reflectance = spires.core.interpolate_idx(self.reflectances, band_idx, solar_idx, dust_idx, grain_idx)
+        reflectance = spires_inversion.core.interpolate_idx(self.reflectances, band_idx, solar_idx, dust_idx, grain_idx)
         return reflectance
 
     def interpolate_pts(self, pts):
@@ -289,8 +289,8 @@ class LutInterpolator:
 
         Examples
         --------
-        >>> import spires
-        >>> interpolator = spires.LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
+        >>> import spires_inversion
+        >>> interpolator = spires_inversion.LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
         >>> reflectance = interpolator.interpolate_pts([1, 0, 0.1, 30])
         >>> round(reflectance, 6)
         0.992369
@@ -322,8 +322,8 @@ class LutInterpolator:
 
         Examples
         ----------
-        >>> import spires
-        >>> interpolator = spires.LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
+        >>> import spires_inversion
+        >>> interpolator = spires_inversion.LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
         >>> interpolator.interpolate_all_np_index(solar_angle=0, dust_concentration=0.1, grain_size=30)
         array([0.99236893, 0.987902  , 0.97464906, 0.96756319, 0.96042174,
                0.94498655, 0.1533866 , 0.18644477, 0.92160772])
@@ -332,7 +332,7 @@ class LutInterpolator:
         solar_idx = get_index(coordinates=self.solar_angles, value=solar_angle)
         dust_idx = get_index(coordinates=self.dust_concentrations, value=dust_concentration)
         grain_idx = get_index(coordinates=self.grain_sizes, value=grain_size)
-        reflectance = spires.core.interpolate_all_idx(self.reflectances, solar_idx, dust_idx, grain_idx)
+        reflectance = spires_inversion.core.interpolate_all_idx(self.reflectances, solar_idx, dust_idx, grain_idx)
         reflectance = np.array(reflectance)
         return reflectance
 
@@ -359,15 +359,15 @@ class LutInterpolator:
 
         Examples
         --------
-        >>> import spires
-        >>> interpolator = spires.LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
+        >>> import spires_inversion
+        >>> interpolator = spires_inversion.LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
         >>> interpolator.interpolate_all(solar_angle=0, dust_concentration=0.1, grain_size=30)
         array([0.99236893, 0.987902  , 0.97464906, 0.96756319, 0.96042174,
                0.94498655, 0.1533866 , 0.18644477, 0.92160772])
 
         """
 
-        return spires.core.interpolate_all_array(self.reflectances,
+        return spires_inversion.core.interpolate_all_array(self.reflectances,
                                                  self.bands,
                                                  self.solar_angles,
                                                  self.dust_concentrations,

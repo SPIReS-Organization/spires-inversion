@@ -3,46 +3,46 @@ API Reference
 
 The API Reference provides an overview of all public objects,
 functions and methods implemented in SpiPy.
-All classes and function exposed in ``spires.*``
+All classes and function exposed in ``spires_inversion.*``
 namespace plus those listed in the reference are public.
 
 
-.. automodsumm:: spires.interpolator
+.. automodsumm:: spires_inversion.interpolator
    :template: instance_methods.rst
 
-.. automodsumm:: spires.invert
+.. automodsumm:: spires_inversion.invert
    :template: instance_methods.rst
 
-.. automodsumm:: spires.parallel
+.. automodsumm:: spires_inversion.parallel
    :template: instance_methods.rst
 
-.. automodsumm:: spires.utol
+.. automodsumm:: spires_inversion.utol
    :template: instance_methods.rst
 
-.. automodsumm:: spires.legacy
+.. automodsumm:: spires_inversion.legacy
    :template: instance_methods.rst
 
-.. automodule:: spires.interpolator
+.. automodule:: spires_inversion.interpolator
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. automodule:: spires.invert
+.. automodule:: spires_inversion.invert
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. automodule:: spires.parallel
+.. automodule:: spires_inversion.parallel
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. automodule:: spires.utol
+.. automodule:: spires_inversion.utol
    :members:
    :undoc-members:
    :show-inheritance:
 
-.. automodule:: spires.legacy
+.. automodule:: spires_inversion.legacy
    :members:
    :undoc-members:
    :show-inheritance:

@@ -1,6 +1,6 @@
 # Documentation build requirements for Read the Docs
 # Note: We skip installing the package to avoid building C++ extensions
-# The C++ module (spires._core) is mocked in conf.py via autodoc_mock_imports
+# The C++ module (spires_inversion._core) is mocked in conf.py via autodoc_mock_imports
 
 # Sphinx and extensions
 sphinx>=4.0

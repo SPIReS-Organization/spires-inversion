@@ -19,7 +19,7 @@ cache:
     - source activate buildenv
     - conda install -c conda-forge nlopt swig gxx gcc make
     - pip install --editable ".[test]"
-    - python -c "import spires; print('Version:', spires.__version__)"
+    - python -c "import spires_inversion; print('Version:', spires_inversion.__version__)"
     # Download test data from Zenodo (avoids LFS quota issues)
     - mkdir -p tests/data
     - echo "Downloading Sentinel-2 LUT from Zenodo..."

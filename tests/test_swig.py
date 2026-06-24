@@ -1,11 +1,11 @@
 import numpy as np
-import spires.core
-import spires
+import spires_inversion.core
+import spires_inversion
 import pytest
 
 ## Testing the .core functions
 
-interpolator = spires.LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat', )
+interpolator = spires_inversion.LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat', )
 
 spectrum_target = np.array([0.3424, 0.366, 0.3624, 0.38932347, 0.41624767, 0.39567757, 0.07043362, 0.06267947, 0.3792])
 spectrum_background = np.array(
@@ -28,7 +28,7 @@ def test_interpolate_all():
 
 def test_interpolate_all_array():
     # this guy returns an array rather than a tuple
-    ret = spires.core.interpolate_all_array(lut=interpolator.reflectances,
+    ret = spires_inversion.core.interpolate_all_array(lut=interpolator.reflectances,
                                             bands=interpolator.bands,
                                             solar_angles=interpolator.solar_angles,
                                             dust_concentrations=interpolator.dust_concentrations,
@@ -43,7 +43,7 @@ def test_interpolate_all_array():
 
 def test_spectrum_difference():
     x = [0.5, 0.01, dust_concentration, grain_size]
-    ret = spires.core.spectrum_difference(x=x,
+    ret = spires_inversion.core.spectrum_difference(x=x,
                                           spectrum_background=spectrum_background,
                                           spectrum_target=spectrum_target,
                                           spectrum_shade=spectrum_shade,
@@ -58,7 +58,7 @@ def test_spectrum_difference():
 
 
 def test_invert():
-    x = spires.core.invert(spectrum_background=spectrum_background,
+    x = spires_inversion.core.invert(spectrum_background=spectrum_background,
                            spectrum_target=spectrum_target,
                            spectrum_shade=spectrum_shade,
                            solar_angle=solar_angle,
@@ -82,7 +82,7 @@ def test_invert_array():
     spectra_targets = np.tile(spectrum_target, (n, 1))
     obs_solar_angles = np.repeat(solar_angle, n)
 
-    spires.core.invert_array1d(spectra_backgrounds=spectra_backgrounds,
+    spires_inversion.core.invert_array1d(spectra_backgrounds=spectra_backgrounds,
                                spectra_targets=spectra_targets,
                                spectrum_shade=spectrum_shade,
                                obs_solar_angles=obs_solar_angles,
@@ -125,7 +125,7 @@ def test_invert_array2d():
                                     np.tile(_pixel_b_background, (3, 1))], axis=0)
     obs_solar_angles = np.full((2, 3), solar_angle)
 
-    results = spires.speedy_invert_array2d(spectra_targets=spectra_targets,
+    results = spires_inversion.speedy_invert_array2d(spectra_targets=spectra_targets,
                                            spectra_backgrounds=spectra_backgrounds,
                                            obs_solar_angles=obs_solar_angles,
                                            interpolator=interpolator,
@@ -160,7 +160,7 @@ def test_invert_array2d():
     spectrum_shade = np.zeros_like(_pixel_a_target)
     for row, target, background in [(0, _pixel_a_target, _pixel_a_background),
                                     (1, _pixel_b_target, _pixel_b_background)]:
-        residual = spires.core.spectrum_difference(
+        residual = spires_inversion.core.spectrum_difference(
             x=results[row, 0],
             spectrum_background=background,
             spectrum_target=target,
@@ -186,7 +186,7 @@ def test_interpolate_all_handles_non_9_band_lut():
 
 
 def _residual(x, target, background):
-    return spires.core.spectrum_difference(
+    return spires_inversion.core.spectrum_difference(
         x=list(x),
         spectrum_background=background,
         spectrum_target=target,
@@ -208,7 +208,7 @@ def test_invert_softmax(algorithm, name):
     Asserted on physical plausibility and residual fit quality (no pinned
     coordinates — they drift across platforms and the softmax surface is
     flatter near the bounds than the constrained version)."""
-    x = spires.core.invert(spectrum_background=spectrum_background,
+    x = spires_inversion.core.invert(spectrum_background=spectrum_background,
                            spectrum_target=spectrum_target,
                            spectrum_shade=spectrum_shade,
                            solar_angle=solar_angle,
@@ -234,7 +234,7 @@ def test_invert_softmax(algorithm, name):
     # Residual: softmax variants should match or beat COBYLA's fit on this
     # pixel (Python A/B confirmed the constraint was holding COBYLA back).
     residual_softmax = _residual(x, spectrum_target, spectrum_background)
-    x_cobyla = spires.core.invert(spectrum_background=spectrum_background,
+    x_cobyla = spires_inversion.core.invert(spectrum_background=spectrum_background,
                                   spectrum_target=spectrum_target,
                                   spectrum_shade=spectrum_shade,
                                   solar_angle=solar_angle,
@@ -274,7 +274,7 @@ def _real_imagery_setup():
         flat_t = R.reshape(-1, 9)
         flat_b = R0.reshape(-1, 9)
         return np.array([
-            spires.snow_diff_4(flat[i], flat_t[i], flat_b[i], sza0, interpolator, shade)
+            spires_inversion.snow_diff_4(flat[i], flat_t[i], flat_b[i], sza0, interpolator, shade)
             for i in range(n)
         ])
 
@@ -288,10 +288,10 @@ def test_softmax_beats_cobyla_on_real_imagery():
     grain bound on more than ~2% of pixels at max_eval=100."""
     R, R0, sza, _, residuals, n = _real_imagery_setup()
 
-    res_cobyla = spires.speedy_invert_array2d(
+    res_cobyla = spires_inversion.speedy_invert_array2d(
         spectra_targets=R, spectra_backgrounds=R0, obs_solar_angles=sza,
         interpolator=interpolator, algorithm=1, max_eval=100, x0=np.array(x0))
-    res_softmax = spires.speedy_invert_array2d(
+    res_softmax = spires_inversion.speedy_invert_array2d(
         spectra_targets=R, spectra_backgrounds=R0, obs_solar_angles=sza,
         interpolator=interpolator, algorithm=4, max_eval=100, x0=np.array(x0))
 
@@ -326,7 +326,7 @@ def test_hybrid_saturation_is_stable_under_max_eval():
     grain_max = interpolator.grain_sizes.max()
 
     def n_saturated(max_eval):
-        res = spires.speedy_invert_array2d(
+        res = spires_inversion.speedy_invert_array2d(
             spectra_targets=R, spectra_backgrounds=R0, obs_solar_angles=sza,
             interpolator=interpolator, algorithm=6, max_eval=max_eval,
             x0=np.array(x0))
@@ -350,7 +350,7 @@ def test_invert_unknown_algorithm_raises():
     """Unknown algorithm codes must raise rather than silently running with an
     uninitialized nlopt::opt — guards against the previous fallthrough bug."""
     with pytest.raises(RuntimeError):
-        spires.core.invert(spectrum_background=spectrum_background,
+        spires_inversion.core.invert(spectrum_background=spectrum_background,
                            spectrum_target=spectrum_target,
                            spectrum_shade=spectrum_shade,
                            solar_angle=solar_angle,

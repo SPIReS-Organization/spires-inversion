@@ -14,7 +14,7 @@ author = 'Niklas Griessbaum'
 # Since the package isn't installed on ReadTheDocs, we use setuptools_scm directly
 try:
     from importlib.metadata import version
-    release = version('spires')
+    release = version('spires_inversion')
 except Exception:
     # Fallback: use setuptools_scm to get version from git
     try:
@@ -44,12 +44,12 @@ class Mock(MagicMock):
         return MagicMock()
 
 # Mock both the C++ extension and the SWIG-generated Python wrapper
-sys.modules['spires._core'] = Mock()
+sys.modules['spires_inversion._core'] = Mock()
 sys.modules['_core'] = Mock()
-sys.modules['spires.core'] = Mock()
+sys.modules['spires_inversion.core'] = Mock()
 
 # Also add to autodoc_mock_imports for extra safety
-autodoc_mock_imports = ['spires._core', '_core', 'spires.core']
+autodoc_mock_imports = ['spires_inversion._core', '_core', 'spires_inversion.core']
 
 
 extensions = ['sphinx.ext.autodoc',
@@ -75,7 +75,7 @@ html_theme = 'pydata_sphinx_theme'
 
 #html_static_path = ['_static']
 
-autosummary_generate = True# ['spires.interpolate']
+autosummary_generate = True# ['spires_inversion.interpolate']
 #autosummary_generate = ['autosummary/*.rst']
 
 #numpydoc_show_class_members = False

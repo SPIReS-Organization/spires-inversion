@@ -1,13 +1,13 @@
 import xarray
-import spires.core
-import spires
+import spires_inversion.core
+import spires_inversion
 import numpy as np
 
 r = xarray.load_dataset('data/sentinel_r.nc')
 r0 = xarray.load_dataset('data/sentinel_r0.nc')
 ts = r.sel(time='2024-02-25').squeeze().drop_vars('time')
 
-interpolator = spires.LutInterpolator(lut_file='data/lut_sentinel2b_b2to12_3um_dust.mat')
+interpolator = spires_inversion.LutInterpolator(lut_file='data/lut_sentinel2b_b2to12_3um_dust.mat')
 bands = interpolator.bands
 solar_angles = interpolator.solar_angles
 dust_concentrations = interpolator.dust_concentrations
@@ -22,7 +22,7 @@ solar_angle = ts.attrs['sun_zenith_mean']
 
 x0 = np.array([0.5, 0.05, 10, 250])
 
-res = spires.core.invert(spectrum_background=spectrum_background,
+res = spires_inversion.core.invert(spectrum_background=spectrum_background,
                          spectrum_target=spectrum_target,
                          spectrum_shade=spectrum_shade,
                          solar_angle=solar_angle,

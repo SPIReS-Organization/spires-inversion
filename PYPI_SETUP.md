@@ -24,7 +24,7 @@ The repository includes a GitHub Actions workflow (`.github/workflows/publish-py
 2. Go to "Your projects" → "Publishing" (or go directly to [https://pypi.org/manage/account/publishing/](https://pypi.org/manage/account/publishing/))
 3. Click "Add a new pending publisher"
 4. Fill in the form:
-   - **PyPI Project Name**: `spires`
+   - **PyPI Project Name**: `spires-inversion`
    - **Owner**: `edwardbair`
    - **Repository name**: `SpiPy`
    - **Workflow name**: `publish-pypi.yml`
@@ -42,7 +42,7 @@ If you prefer using an API token instead of trusted publishing:
 1. Go to [https://pypi.org/manage/account/token/](https://pypi.org/manage/account/token/)
 2. Click "Add API token"
 3. Name it (e.g., "GitHub Actions - SpiPy")
-4. Scope: "Project: spires" (or "Entire account" if the project doesn't exist yet)
+4. Scope: "Project: spires-inversion" (or "Entire account" if the project doesn't exist yet)
 5. Copy the token (starts with `pypi-`)
 
 Then add it to GitHub:
@@ -75,8 +75,8 @@ Before publishing to the real PyPI, test with TestPyPI:
    repository-url: https://test.pypi.org/legacy/
    ```
 4. Create a test release
-5. Verify the package appears at `https://test.pypi.org/project/spires/`
-6. Try installing: `pip install --index-url https://test.pypi.org/simple/ spires`
+5. Verify the package appears at `https://test.pypi.org/project/spires-inversion/`
+6. Try installing: `pip install --index-url https://test.pypi.org/simple/ spires-inversion`
 7. Once confirmed working, remove the `repository-url` line to publish to real PyPI
 
 ## Publishing a Release
@@ -103,8 +103,8 @@ Once setup is complete, publishing is automatic:
    - Check progress at: [https://github.com/edwardbair/SpiPy/actions](https://github.com/edwardbair/SpiPy/actions)
 
 4. **Verify publication:**
-   - Package appears at: [https://pypi.org/project/spires/](https://pypi.org/project/spires/)
-   - Install with: `pip install spires`
+   - Package appears at: [https://pypi.org/project/spires-inversion/](https://pypi.org/project/spires-inversion/)
+   - Install with: `pip install spires-inversion`
 
 ## Workflow Files
 
@@ -151,8 +151,8 @@ pip install build
 python -m build --wheel
 
 # Install and test
-pip install dist/spires-*.whl
-python -c "import spires; print(spires.__version__)"
+pip install dist/spires_inversion-*.whl
+python -c "import spires_inversion; print(spires_inversion.__version__)"
 ```
 
 ## Resources

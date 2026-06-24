@@ -14,10 +14,10 @@ This is a **performance-critical scientific computing project** with a hybrid ar
 - **SWIG**: Bindings between Python and C++
 
 **Critical files**:
-- [spires/spires.cpp](spires/spires.cpp): Core C++ implementations (interpolation, optimization)
-- [spires/interpolator.py](spires/interpolator.py): LUT interpolation interface
-- [spires/invert.py](spires/invert.py): Main inversion algorithm
-- [spires/process.py](spires/process.py): High-level processing pipeline
+- [spires_inversion/spires.cpp](spires_inversion/spires.cpp): Core C++ implementations (interpolation, optimization)
+- [spires_inversion/interpolator.py](spires_inversion/interpolator.py): LUT interpolation interface
+- [spires_inversion/invert.py](spires_inversion/invert.py): Main inversion algorithm
+- [spires_inversion/process.py](spires_inversion/process.py): High-level processing pipeline
 
 ### Key Components
 
@@ -76,7 +76,7 @@ python -m build --wheel
 
 ### File Organization
 ```
-spires/
+spires_inversion/
   ├── __init__.py          # Package exports
   ├── interpolator.py      # LUT interpolation wrapper
   ├── invert.py            # Main inversion functions

@@ -6,7 +6,7 @@ This script shows how to use the refactored Dask parallelization functionality
 that was previously implemented inline in the notebooks.
 """
 
-import spires
+import spires_inversion
 import xarray as xr
 import numpy as np
 from dask.distributed import Client, LocalCluster
@@ -43,7 +43,7 @@ def main():
     # Load LUT
     print("Loading lookup table...")
     lut_file = '../tests/data/lut_sentinel2b_b2to12_3um_dust.mat'
-    lut_interpolator = spires.LutInterpolator(lut_file=lut_file)
+    lut_interpolator = spires_inversion.LutInterpolator(lut_file=lut_file)
 
     # Select a subset for processing (e.g., first 10 time steps)
     spectra_targets = ds['reflectance'].isel(time=slice(0, 10))
@@ -74,7 +74,7 @@ def main():
 
     # Run parallel inversion using the new method
     print("Running parallel inversion with speedy_invert_dask...")
-    results = spires.speedy_invert_dask(
+    results = spires_inversion.speedy_invert_dask(
         spectra_targets=spectra_targets,
         spectra_backgrounds=spectra_backgrounds,
         obs_solar_angles=obs_solar_angles,

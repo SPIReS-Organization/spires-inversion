@@ -10,11 +10,11 @@ import sys
 sys.path.insert(0, '/home/griessban/SpiPy')
 
 try:
-    import spires
-    print("✓ Successfully imported spires")
+    import spires_inversion
+    print("✓ Successfully imported spires_inversion")
 
     # Check if the new function exists
-    if hasattr(spires, 'speedy_invert_dask'):
+    if hasattr(spires_inversion, 'speedy_invert_dask'):
         print("✓ speedy_invert_dask function is available")
     else:
         print("✗ speedy_invert_dask function not found")
@@ -32,7 +32,7 @@ try:
 
     # Test the function signature
     import inspect
-    sig = inspect.signature(spires.speedy_invert_dask)
+    sig = inspect.signature(spires_inversion.speedy_invert_dask)
     params = list(sig.parameters.keys())
     expected_params = [
         'spectra_targets', 'spectra_backgrounds', 'obs_solar_angles',
@@ -48,10 +48,10 @@ try:
         print(f"  Got: {params}")
 
     # Check docstring
-    if spires.speedy_invert_dask.__doc__:
+    if spires_inversion.speedy_invert_dask.__doc__:
         print("✓ Function has documentation")
         # Check for key sections
-        doc = spires.speedy_invert_dask.__doc__
+        doc = spires_inversion.speedy_invert_dask.__doc__
         if "Parameters" in doc and "Returns" in doc and "Examples" in doc:
             print("✓ Documentation includes Parameters, Returns, and Examples sections")
         else:
@@ -67,7 +67,7 @@ try:
     print("4. Dask installed for parallel processing")
 
 except ImportError as e:
-    print(f"✗ Failed to import spires: {e}")
+    print(f"✗ Failed to import spires_inversion: {e}")
     sys.exit(1)
 except Exception as e:
     print(f"✗ Unexpected error: {e}")

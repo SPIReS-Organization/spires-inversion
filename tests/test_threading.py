@@ -6,11 +6,11 @@ from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 import pytest
 
-import spires
-from spires.invert import speedy_invert_array2d
+import spires_inversion
+from spires_inversion.invert import speedy_invert_array2d
 
 
-interpolator = spires.LutInterpolator(
+interpolator = spires_inversion.LutInterpolator(
     lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
 
 spectrum_target = np.array(

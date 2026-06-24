@@ -54,11 +54,11 @@ pip3 install dist/*.whl
 Here's a minimal example of inverting a single snow spectrum:
 
 ```python
-import spires
+import spires_inversion
 import numpy as np
 
 # Load the lookup table
-interpolator = spires.interpolator.LutInterpolator(
+interpolator = spires_inversion.interpolator.LutInterpolator(
     lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat'
 )
 
@@ -70,7 +70,7 @@ spectrum_background = np.array([0.0182, 0.0265, 0.0283, 0.0561,
 solar_angle = 55.73  # degrees
 
 # Run inversion
-fsca, fshade, dust, grain_size = spires.speedy_invert(
+fsca, fshade, dust, grain_size = spires_inversion.speedy_invert(
     spectrum_target=spectrum_target,
     spectrum_background=spectrum_background,
     solar_angle=solar_angle,
@@ -89,7 +89,7 @@ For processing multiple pixels or entire images, use the array-based functions:
 
 ```python
 # Process a 2D array of spectra
-results = spires.speedy_invert_array2d(
+results = spires_inversion.speedy_invert_array2d(
     spectra_targets=targets,      # shape: (ny, nx, n_bands)
     spectra_backgrounds=backgrounds,  # shape: (ny, nx, n_bands)
     obs_solar_angles=solar_angles,    # shape: (ny, nx)
@@ -121,7 +121,7 @@ solar_angles = xr.open_dataarray('solar_angles.nc')
 lut = xr.open_dataarray('lut.nc')
 
 # Run inversion
-results = spires.speedy_invert_xarray(
+results = spires_inversion.speedy_invert_xarray(
     spectra_targets=targets,
     spectra_backgrounds=backgrounds,
     obs_solar_angles=solar_angles,
@@ -141,19 +141,19 @@ copy per worker process.
 import xarray as xr
 from dask.distributed import Client
 
-import spires
+import spires_inversion
 
 # Inputs as chunked DataArrays (time, y, x, band) etc.
 targets = xr.open_zarr('sentinel2_data.zarr')['reflectance']
 backgrounds = xr.open_dataarray('background_r0.nc')
 solar_angles = xr.open_dataarray('solar_angles.nc')
 
-interpolator = spires.LutInterpolator(
+interpolator = spires_inversion.LutInterpolator(
     lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat'
 )
 
 with Client(n_workers=4, threads_per_worker=4) as client:
-    ds = spires.speedy_invert_dask(
+    ds = spires_inversion.speedy_invert_dask(
         spectra_targets=targets,
         spectra_backgrounds=backgrounds,
         obs_solar_angles=solar_angles,
@@ -162,7 +162,7 @@ with Client(n_workers=4, threads_per_worker=4) as client:
     )
 
     # Encode for compact storage (NaN -> fill value, fractions scaled to int)
-    encoded = spires.encode_results(ds)
+    encoded = spires_inversion.encode_results(ds)
     encoded.to_netcdf('inversion_results.nc')
 ```
 

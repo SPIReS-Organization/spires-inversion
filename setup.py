@@ -30,9 +30,9 @@ NLOP_INCLUDE_DIRS = [
 
 INCLUDE_DIRS = NLOP_INCLUDE_DIRS + [numpy.get_include()]
 
-spires = setuptools.Extension(  
-    name='spires._core',
-    sources=['spires/spires.i', 'spires/spires.cpp'],
+spires = setuptools.Extension(
+    name='spires_inversion._core',
+    sources=['spires_inversion/spires.i', 'spires_inversion/spires.cpp'],
     swig_opts=['-c++'],
     extra_compile_args=['-std=c++11'],
     library_dirs=NLOP_LIB_DIRS,    

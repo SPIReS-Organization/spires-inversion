@@ -88,4 +88,4 @@ jobs:
     - name: Test import and version
       shell: bash -l {0}
       run: |
-        python -c "import spires; print(f'SpiPy version: {spires.__version__}')"
+        python -c "import spires_inversion; print(f'spires-inversion version: {spires_inversion.__version__}')"

@@ -1,5 +1,5 @@
-import spires.interpolator
-import spires.core
+import spires_inversion.interpolator
+import spires_inversion.core
 import numpy as np
 import scipy
 
@@ -33,7 +33,7 @@ def speedy_invert(spectrum_target, spectrum_background, solar_angle, spectrum_sh
     reflectances : numpy.ndarray, optional
         4D snow reflectance lookup table with dimensions (bands, solar_angles,
         dust_concentrations, grain_sizes). Required if interpolator not provided.
-    interpolator : spires.interpolator.LutInterpolator, optional
+    interpolator : spires_inversion.interpolator.LutInterpolator, optional
         Pre-configured interpolator. If provided, overrides individual LUT parameters.
     lut_dataarray : xarray.DataArray, optional
         Not currently used. Reserved for future xarray support.
@@ -77,13 +77,13 @@ def speedy_invert(spectrum_target, spectrum_background, solar_angle, spectrum_sh
 
     Examples
     --------
-    >>> import spires
+    >>> import spires_inversion
     >>> import numpy as np
     >>> spectrum_target = np.array([0.3424,0.366,0.3624,0.38932347,0.41624767,0.39567757,0.07043362,0.06267947, 0.3792])
     >>> spectrum_background = np.array([0.0182,0.0265,0.0283,0.056067,0.095432,0.12036866,0.12491679,0.07888655,0.1406])
     >>> solar_angle = 55.73733298
-    >>> interpolator = spires.interpolator.LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
-    >>> spires.speedy_invert(spectrum_target=spectrum_target, spectrum_background=spectrum_background,
+    >>> interpolator = spires_inversion.interpolator.LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
+    >>> spires_inversion.speedy_invert(spectrum_target=spectrum_target, spectrum_background=spectrum_background,
     ...                      solar_angle=solar_angle, interpolator=interpolator, algorithm=1)
     (0.4089303296055291, 0.155201675059351, 138.79357872804923, 364.58404302094834)
     """
@@ -98,7 +98,7 @@ def speedy_invert(spectrum_target, spectrum_background, solar_angle, spectrum_sh
         grain_sizes = interpolator.grain_sizes
         reflectances = interpolator.reflectances
 
-    return spires.core.invert(spectrum_background=spectrum_background, spectrum_target=spectrum_target,
+    return spires_inversion.core.invert(spectrum_background=spectrum_background, spectrum_target=spectrum_target,
                               spectrum_shade=spectrum_shade,
                               solar_angle=solar_angle, bands=bands, solar_angles=solar_angles,
                               dust_concentrations=dust_concentrations, grain_sizes=grain_sizes, lut=reflectances,
@@ -140,7 +140,7 @@ def speedy_invert_array1d(spectra_targets, spectra_backgrounds, obs_solar_angles
     reflectances : numpy.ndarray, optional
         4D snow reflectance lookup table with dimensions (bands, solar_angles,
         dust_concentrations, grain_sizes). Required if interpolator not provided.
-    interpolator : spires.interpolator.LutInterpolator, optional
+    interpolator : spires_inversion.interpolator.LutInterpolator, optional
         Pre-configured interpolator. If provided, overrides individual LUT parameters.
     lut_dataarray : xarray.DataArray, optional
         Not currently used. Reserved for future xarray support.
@@ -183,15 +183,15 @@ def speedy_invert_array1d(spectra_targets, spectra_backgrounds, obs_solar_angles
 
     Examples
     --------
-    >>> import spires
+    >>> import spires_inversion
     >>> import numpy as np
     >>> spectra_targets = np.array([[0.3424,0.366,0.3624,0.38932347,0.41624767,0.39567757,0.0704336,0.06267947,0.3792],
     ...                            [0.2866,0.3046,0.324,0.34468558,0.35373732,0.35651454,0.1807259,0.16601688,0.3488]])
     >>> spectra_backgrounds = np.array([[0.0182,0.0265,0.0283,0.0560674,0.0954323,0.1203686,0.1249167,0.0788865,0.1406],
     ...                                [0.1002,0.1492,0.2088,0.2179780,0.2314920,0.2514020,0.3103066,0.2875081,0.2546]])
     >>> obs_solar_angles = np.array([55.73733298, 55.83733298])
-    >>> interpolator = spires.interpolator.LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
-    >>> spires.speedy_invert_array1d(spectra_targets=spectra_targets, spectra_backgrounds=spectra_backgrounds,
+    >>> interpolator = spires_inversion.interpolator.LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
+    >>> spires_inversion.speedy_invert_array1d(spectra_targets=spectra_targets, spectra_backgrounds=spectra_backgrounds,
     ...                            obs_solar_angles=obs_solar_angles, interpolator=interpolator, algorithm=1)
     array([[4.06627881e-01, 1.45134251e-01, 1.37503982e+02, 3.61158500e+02],
            [2.63873228e-01, 1.83226478e-01, 1.94343159e+02, 3.80170927e+02]])
@@ -209,7 +209,7 @@ def speedy_invert_array1d(spectra_targets, spectra_backgrounds, obs_solar_angles
     n = spectra_targets.shape[0]
     results = np.empty((n, 4), dtype=np.double)
 
-    spires.core.invert_array1d(spectra_targets=spectra_targets, spectra_backgrounds=spectra_backgrounds,
+    spires_inversion.core.invert_array1d(spectra_targets=spectra_targets, spectra_backgrounds=spectra_backgrounds,
                                spectrum_shade=spectrum_shade,
                                obs_solar_angles=obs_solar_angles, bands=bands, solar_angles=solar_angles,
                                dust_concentrations=dust_concentrations,
@@ -279,7 +279,7 @@ def speedy_invert_array2d(spectra_targets, spectra_backgrounds, obs_solar_angles
     reflectances : numpy.ndarray, optional
         4D snow reflectance lookup table with dimensions (bands, solar_angles,
         dust_concentrations, grain_sizes). Required if interpolator not provided.
-    interpolator : spires.interpolator.LutInterpolator, optional
+    interpolator : spires_inversion.interpolator.LutInterpolator, optional
         Pre-configured interpolator. If provided, overrides individual LUT parameters.
 
     Returns
@@ -312,7 +312,7 @@ def speedy_invert_array2d(spectra_targets, spectra_backgrounds, obs_solar_angles
     results = np.empty((spectra_targets.shape[0], spectra_targets.shape[1], 4), dtype=np.double)
 
 
-    spires.core.invert_array2d(spectra_backgrounds=spectra_backgrounds,
+    spires_inversion.core.invert_array2d(spectra_backgrounds=spectra_backgrounds,
                                spectra_targets=spectra_targets,
                                spectrum_shade=spectrum_shade,
                                obs_solar_angles=obs_solar_angles,
@@ -410,7 +410,7 @@ def speedy_invert_xarray(spectra_targets, spectra_backgrounds, obs_solar_angles,
 
     results = np.empty((spectra_targets.y.size, spectra_targets.x.size, 4), dtype=np.double)
 
-    spires.core.invert_array2d(spectra_backgrounds=spectra_backgrounds,
+    spires_inversion.core.invert_array2d(spectra_backgrounds=spectra_backgrounds,
                                spectra_targets=spectra_targets,
                                spectrum_shade=spectrum_shade,
                                obs_solar_angles=obs_solar_angles,
@@ -457,7 +457,7 @@ def snow_diff_4(x, spectrum_target, spectrum_background, solar_angle, interpolat
         The background (snow-free, R_0) spectrum.
     solar_angle : float
         Solar zenith angle of the observation (degrees).
-    interpolator : spires.interpolator.LutInterpolator
+    interpolator : spires_inversion.interpolator.LutInterpolator
         Callable object that returns modeled snow spectrum given
         solar_angle, dust_concentration, and grain_size.
     shade : numpy.ndarray
@@ -475,9 +475,9 @@ def snow_diff_4(x, spectrum_target, spectrum_background, solar_angle, interpolat
 
     Examples
     --------
-    >>> import spires
+    >>> import spires_inversion
     >>> import numpy as np
-    >>> interpolator = spires.interpolator.LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
+    >>> interpolator = spires_inversion.interpolator.LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
     >>> f_sca = 0.482
     >>> f_shade = 0.065
     >>> dust_concentration = 1000  # ppm
@@ -487,7 +487,7 @@ def snow_diff_4(x, spectrum_target, spectrum_background, solar_angle, interpolat
     >>> spectrum_target = np.array([0.3424,0.366,0.3624,0.38932347,0.41624767,0.39567757,0.07043362,0.06267947, 0.3792])
     >>> spectrum_background = np.array([0.0182,0.0265,0.0283,0.056067,0.095432,0.12036866,0.12491679,0.07888655,0.1406])
     >>> shade = np.array([0,0,0,0,0,0,0,0,0])
-    >>> diff = spires.snow_diff_4(x=x, spectrum_target=spectrum_target, spectrum_background=spectrum_background,
+    >>> diff = spires_inversion.snow_diff_4(x=x, spectrum_target=spectrum_target, spectrum_background=spectrum_background,
     ...                    solar_angle=solar_angle, interpolator=interpolator, shade=shade)
     >>> diff
     0.08870043573321955
@@ -526,7 +526,7 @@ def snow_diff_3(x, spectrum_target, solar_angle, interpolator, shade):
         The observed mixed spectrum to match.
     solar_angle : float
         Solar zenith angle of the observation (degrees).
-    interpolator : spires.interpolator.LutInterpolator
+    interpolator : spires_inversion.interpolator.LutInterpolator
         Callable object that returns modeled snow spectrum given
         solar_angle, dust_concentration, and grain_size.
     shade : numpy.ndarray
@@ -544,9 +544,9 @@ def snow_diff_3(x, spectrum_target, solar_angle, interpolator, shade):
 
     Examples
     --------
-    >>> import spires
+    >>> import spires_inversion
     >>> import numpy as np
-    >>> interpolator = spires.interpolator.LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
+    >>> interpolator = spires_inversion.interpolator.LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
     >>> f_sca = 0.482
     >>> dust_concentration = 1000  # ppm
     >>> grain_size = 220  # μm
@@ -554,7 +554,7 @@ def snow_diff_3(x, spectrum_target, solar_angle, interpolator, shade):
     >>> x = [f_sca, dust_concentration, grain_size]
     >>> spectrum_target = np.array([0.3424,0.366,0.3624,0.38932347,0.41624767,0.39567757,0.07043362,0.06267947, 0.3792])
     >>> shade = np.array([0,0,0,0,0,0,0,0,0])
-    >>> spires.snow_diff_3(x=x, spectrum_target=spectrum_target,
+    >>> spires_inversion.snow_diff_3(x=x, spectrum_target=spectrum_target,
     ...                    solar_angle=solar_angle, interpolator=interpolator, shade=shade)
     0.06984199561833446
     """
@@ -623,7 +623,7 @@ def snow_diff_softmax(z, spectrum_target, spectrum_background, solar_angle, inte
     return np.linalg.norm(spectrum_target - model_reflectances)
 
 
-def speedy_invert_scipy_softmax(interpolator: spires.interpolator.LutInterpolator,
+def speedy_invert_scipy_softmax(interpolator: spires_inversion.interpolator.LutInterpolator,
                                 spectrum_target, spectrum_background, solar_angle,
                                 shade=None, scipy_options=None, method='Nelder-Mead', z0=None):
     """
@@ -679,7 +679,7 @@ def speedy_invert_scipy_softmax(interpolator: spires.interpolator.LutInterpolato
 
 
 
-def speedy_invert_scipy(interpolator: spires.interpolator.LutInterpolator, spectrum_target, spectrum_background,
+def speedy_invert_scipy(interpolator: spires_inversion.interpolator.LutInterpolator, spectrum_target, spectrum_background,
                         solar_angle, shade=None,
                         scipy_options=None, mode=3, method='SLSQP'):
     """
@@ -690,7 +690,7 @@ def speedy_invert_scipy(interpolator: spires.interpolator.LutInterpolator, spect
 
     Parameters
     ----------
-    interpolator : spires.interpolator.LutInterpolator
+    interpolator : spires_inversion.interpolator.LutInterpolator
         Interpolator object with:
         - Attributes: `bands`, `solar_angles`, `dust_concentrations`, `grain_sizes`
         - Method: `interpolate_all(solar_angle, dust_concentration, grain_size)`
@@ -734,14 +734,14 @@ def speedy_invert_scipy(interpolator: spires.interpolator.LutInterpolator, spect
 
     Examples
     --------
-    >>> import spires
+    >>> import spires_inversion
     >>> import numpy as np
-    >>> interpolator = spires.interpolator.LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
+    >>> interpolator = spires_inversion.interpolator.LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
     >>> interpolator.make_scipy_interpolator_legacy()
     >>> spectrum_target = np.array([0.3424,0.366,0.3624,0.38932347,0.41624767,0.39567757,0.07043362,0.06267947, 0.3792])
     >>> spectrum_background = np.array([0.0182,0.0265,0.0283,0.056067,0.095432,0.12036866,0.12491679,0.07888655,0.1406])
     >>> solar_angle = 24.0
-    >>> res, model_refl = spires.speedy_invert_scipy(interpolator=interpolator,
+    >>> res, model_refl = spires_inversion.speedy_invert_scipy(interpolator=interpolator,
     ...                                              spectrum_target=spectrum_target,
     ...                                              spectrum_background=spectrum_background,
     ...                                              solar_angle=solar_angle,
@@ -833,7 +833,7 @@ def index_to_value(index, coords):
     return coords[l_idx] + dist * diff
 
 
-def speedy_invert_scipy_normalized(interpolator: spires.interpolator.LutInterpolator,
+def speedy_invert_scipy_normalized(interpolator: spires_inversion.interpolator.LutInterpolator,
                                    spectrum_target, spectrum_background, solar_angle, spectrum_shade=None,
                                    method='COBYLA'):
     """
@@ -845,7 +845,7 @@ def speedy_invert_scipy_normalized(interpolator: spires.interpolator.LutInterpol
 
     Parameters
     ----------
-    interpolator : spires.interpolator.LutInterpolator
+    interpolator : spires_inversion.interpolator.LutInterpolator
         Interpolator object with lookup table and coordinate arrays.
     spectrum_target : numpy.ndarray
         Target spectrum to be inverted.
@@ -891,7 +891,7 @@ def speedy_invert_scipy_normalized(interpolator: spires.interpolator.LutInterpol
     bounds = np.array([bounds_fsca, bounds_fshade, bounds_dust, bounds_grain], dtype=float)
     x0 = np.array([0.5, 0.05, 0.01, 0.1])
 
-    res = scipy.optimize.minimize(spires.core.spectrum_difference_scaled,
+    res = scipy.optimize.minimize(spires_inversion.core.spectrum_difference_scaled,
                                   x0,
                                   method=method,
                                   options=scipy_options,

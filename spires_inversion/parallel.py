@@ -1,7 +1,7 @@
 """Dask-parallel inversion of snow reflectance spectra."""
 import numpy as np
 
-from spires.invert import speedy_invert_array2d
+from spires_inversion.invert import speedy_invert_array2d
 
 
 _VARIABLE_ATTRS = {
@@ -191,7 +191,7 @@ def speedy_invert_dask(spectra_targets, spectra_backgrounds, obs_solar_angles,
     obs_solar_angles : xarray.DataArray
         Solar zenith angles (degrees) for each observation.
         Shape: (time, y, x) or (y, x).
-    interpolator : spires.interpolator.LutInterpolator
+    interpolator : spires_inversion.interpolator.LutInterpolator
         Lookup table interpolator object.
     spectrum_shade : numpy.ndarray, optional
         Currently unused: speedy_invert_array2d hardcodes a zero shade spectrum.

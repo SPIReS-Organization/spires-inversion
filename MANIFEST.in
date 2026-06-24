@@ -1,5 +1,5 @@
 prune tests
 prune examples
-include spires/spires.h
-include spires/spires.cpp
-include spires/numpy.i
+include spires_inversion/spires.h
+include spires_inversion/spires.cpp
+include spires_inversion/numpy.i
