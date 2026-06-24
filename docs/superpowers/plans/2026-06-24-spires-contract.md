@@ -794,7 +794,7 @@ git commit -m "Stub lut, r0, and results boundary contracts"
 - [ ] **Step 1: Run the full test suite**
 
 Run: `cd /home/griessban/spires/spires-contract && conda run -n spipy14 pytest -v`
-Expected: PASS (27 tests: 5 conventions + 8 validate + 14 spectra). 0 failures.
+Expected: PASS (31 tests: 5 conventions + 10 validate + 16 spectra). 0 failures.
 
 - [ ] **Step 2: Verify a clean editable install + import surface**
 
