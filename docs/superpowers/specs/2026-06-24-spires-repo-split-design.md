@@ -198,15 +198,24 @@ Beyond `spires-contract`, the following were built and pushed:
   `compress_nc` → io; `03` → r0; `04`, `06`, `07`, `08` → postprocess. Core
   inversion + test notebooks stay in `spires-inversion`.
 - **`spires-contract` wired into `spires-inversion`**: `speedy_invert_xarray`
-  now conforms inputs via `spires_contract.spectra.conform_*` instead of ad-hoc
-  transposes; `spires-contract` added as a dependency. (Surfaced and fixed a
-  pre-existing `lut=`/`reflectances=` kwarg bug in that untested function.)
+  validates its inputs against the contract at the boundary; `spires-contract`
+  added as a dependency. (Surfaced and fixed a pre-existing
+  `lut=`/`reflectances=` kwarg bug in that untested function.)
 - **Package renamed `spires` → `spires_inversion`** (import name) / dist
   `spires-inversion`, freeing the `spires` name for the metapackage. SWIG/C++
   extension renamed in lockstep; full suite green (27 passed).
 - **LUT C++/SWIG parameters prefixed `lut_`** (`bands`→`lut_bands`,
   `lut`→`lut_reflectances`, etc.) to disambiguate from the spectra/observation
   parameters beside them.
+- **Contract is validate-only; dimension order is part of the contract**
+  (reverses the earlier "lightweight normalizer/`conform_*`" decision above).
+  `conform_*` was removed: a contract that silently transposes/casts hides a
+  per-call cost (a large-array copy) behind what looks like a check. Producers
+  hand over canonical data — *including dim order*, since the C++ kernel indexes
+  positionally — and `validate_*` now flags wrong order too. `speedy_invert_xarray`
+  no longer transposes; it validates on entry, so a misshaped array raises a
+  clear `ContractError` instead of a cryptic C++ segfault. `spires-contract` and
+  `spires-inversion` versioning moved to setuptools_scm.
 
 ## Distribution & docs (future)
 
