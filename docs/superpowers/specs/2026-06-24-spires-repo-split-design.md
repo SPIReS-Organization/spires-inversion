@@ -160,10 +160,12 @@ Derived from the existing `speedy_invert_xarray` docstring and call in
 
 ## Attribution
 
-Infrastructure commits are authored by the user
+Infrastructure / repo-split commits are authored by the user
 (`niklas <niklas.griessbaum@leidos.com>`) with **no `Co-Authored-By: Claude`
-trailer** and no Claude attribution. (To be revisited for the future
-PR-driven workflow, where Claude attribution is welcome.)
+trailer** — not to withhold credit, but to avoid sparking pointless discussion
+with collaborators on the foundational seed commits. Claude attribution **is**
+wanted for the normal PR-driven workflow that follows, where the trailer is
+added back.
 
 ## Out of Scope (future spec → plan cycles)
 
