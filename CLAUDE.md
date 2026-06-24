@@ -1,7 +1,7 @@
-# CLAUDE.md - AI Assistant Context for SpiPy
+# CLAUDE.md - AI Assistant Context for spires-inversion
 
 ## Project Overview
-SpiPy is a Python implementation of SPIRES (SPectral Inversion of REflectance from Snow), a spectral unmixing algorithm for analyzing snow reflectance data. The original MATLAB implementation is described in [this IEEE paper](https://ieeexplore.ieee.org/document/9290428).
+spires-inversion is a Python implementation of SPIRES (SPectral Inversion of REflectance from Snow), a spectral unmixing algorithm for analyzing snow reflectance data. The original MATLAB implementation is described in [this IEEE paper](https://ieeexplore.ieee.org/document/9290428).
 
 **Core Purpose**: Invert satellite reflectance spectra to retrieve snow properties (grain size, dust concentration, fractional snow-covered area) using lookup tables generated from Mie-scattering theory.
 

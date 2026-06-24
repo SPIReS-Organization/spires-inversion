@@ -1,4 +1,4 @@
-# SpiPy
+# spires-inversion
 
 [![PyPI version](https://badge.fury.io/py/spires.svg)](https://pypi.org/project/spires/)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18747284.svg)](https://doi.org/10.5281/zenodo.18747284)
@@ -9,7 +9,7 @@
 
 **[📦 View Source on GitHub](https://github.com/NiklasPhabian/SpiPy)** | **[📖 Documentation](https://spipy.readthedocs.io)** | **[🐛 Report Issues](https://github.com/NiklasPhabian/SpiPy/issues)**
 
-SpiPy is a Python implementation of [SPIRES](https://ieeexplore.ieee.org/document/9290428) (Snow Property Inversion From Remote Sensing), originally implemented in MATLAB ([SPIRES GitHub repository](https://github.com/edwardbair/SPIRES)).
+`spires-inversion` is a Python implementation of [SPIRES](https://ieeexplore.ieee.org/document/9290428) (Snow Property Inversion From Remote Sensing), originally implemented in MATLAB ([SPIRES GitHub repository](https://github.com/edwardbair/SPIRES)). It is the core inversion engine of the [SPIReS package family](https://github.com/SPIReS-Organization) and imports as `spires_inversion`.
 
 ## Overview
 
@@ -78,11 +78,11 @@ See the `examples/` folder for Jupyter notebooks with detailed use cases.
 Basic usage:
 
 ```python
-import spires
+import spires_inversion
 import numpy as np
 
 # Load lookup table
-interpolator = spires.LutInterpolator(
+interpolator = spires_inversion.LutInterpolator(
     lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat'
 )
 
@@ -92,7 +92,7 @@ spectrum_target = np.array([0.3424, 0.366, 0.3624, 0.3893,
 spectrum_background = np.array([0.0182, 0.0265, 0.0283, 0.0561,
                                 0.0954, 0.1204, 0.1249, 0.0789, 0.1406])
 
-fsca, fshade, dust, grain_size = spires.speedy_invert(
+fsca, fshade, dust, grain_size = spires_inversion.speedy_invert(
     spectrum_target=spectrum_target,
     spectrum_background=spectrum_background,
     solar_angle=55.73,

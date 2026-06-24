@@ -152,7 +152,7 @@ For more information, see tests/data/README.md
     total_mb = sum(info['size_mb'] for info in to_download.values())
 
     print("=" * 70)
-    print("SpiPy Test Data Download")
+    print("spires-inversion Test Data Download")
     print("=" * 70)
     print(f"\nFiles to download: {len(to_download)}")
     print(f"Total size: ~{total_mb} MB ({total_mb/1024:.2f} GB)")

@@ -1,6 +1,6 @@
 # Examples and Tutorials
 
-This page links to example Jupyter notebooks demonstrating the usage of SpiPy for snow property inversion from satellite imagery.
+This page links to example Jupyter notebooks demonstrating the usage of spires-inversion for snow property inversion from satellite imagery.
 
 ## Main Workflow Examples
 
@@ -43,7 +43,7 @@ These notebooks demonstrate specific functionality and can be used for testing:
 
 ### For New Users
 
-If you're new to SpiPy, we recommend going through the notebooks in this order:
+If you're new to spires-inversion, we recommend going through the notebooks in this order:
 
 1. **[test_interpolator.ipynb](../../examples/test_interpolator.ipynb)** - Understand the core LUT interpolation
 2. **[test_inversion.ipynb](../../examples/test_inversion.ipynb)** - See basic inversion examples on single pixels
@@ -65,7 +65,7 @@ For processing your own Sentinel-2 data, follow this sequence:
 ## Requirements
 
 Most notebooks require:
-- SpiPy package installed (see [Getting Started](getting_started.md))
+- spires-inversion package installed (see [Getting Started](getting_started.md))
 - Access to Sentinel-2 data (zarr format)
 - Lookup tables (LUT) for snow reflectance
 - Sufficient memory for processing satellite imagery

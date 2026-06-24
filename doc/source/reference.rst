@@ -2,7 +2,7 @@ API Reference
 =============
 
 The API Reference provides an overview of all public objects,
-functions and methods implemented in SpiPy.
+functions and methods implemented in spires-inversion.
 All classes and function exposed in ``spires_inversion.*``
 namespace plus those listed in the reference are public.
 

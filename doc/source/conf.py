@@ -6,7 +6,7 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = 'SpiPy'
+project = 'spires-inversion'
 copyright = '2024, Niklas Griessbaum'
 author = 'Niklas Griessbaum'
 

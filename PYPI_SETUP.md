@@ -1,6 +1,6 @@
 # PyPI Publishing Setup
 
-This document explains how to set up automatic publishing to PyPI for SpiPy releases.
+This document explains how to set up automatic publishing to PyPI for spires-inversion releases.
 
 ## Overview
 

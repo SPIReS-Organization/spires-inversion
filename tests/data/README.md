@@ -1,6 +1,6 @@
 # Test Data Files
 
-This directory contains test data for the SpiPy package.
+This directory contains test data for the spires-inversion package.
 
 ## Files in Repository (via Git LFS)
 

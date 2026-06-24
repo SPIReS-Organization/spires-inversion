@@ -1,6 +1,6 @@
-# SpiPy Examples
+# spires-inversion Examples
 
-This directory contains example notebooks demonstrating the usage of SpiPy for snow property inversion from satellite imagery.
+This directory contains example notebooks demonstrating the usage of spires-inversion for snow property inversion from satellite imagery.
 
 ## Main Workflow Examples
 
@@ -50,7 +50,7 @@ The following notebooks were used during development and are kept for reference:
 ## Requirements
 
 Most notebooks require:
-- SpiPy package installed
+- spires-inversion package installed
 - Access to Sentinel-2 data (zarr format)
 - Lookup tables (LUT) for snow reflectance
 - Sufficient memory for processing satellite imagery

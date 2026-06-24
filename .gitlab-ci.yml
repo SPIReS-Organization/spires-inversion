@@ -1,4 +1,4 @@
-# GitLab CI configuration for SpiPy
+# GitLab CI configuration for spires-inversion
 # Tests across Python 3.9-3.14 to match GitHub workflows
 
 image: continuumio/miniconda3
