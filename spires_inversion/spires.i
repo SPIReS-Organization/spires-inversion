@@ -34,7 +34,7 @@ namespace std {
 
 
 %apply (double* IN_ARRAY4, int DIM1, int DIM2, int DIM3, int DIM4) { 
-    (double* lut, int n_bands, int n_solar_angles, int n_dust_concentrations, int n_grain_sizes)
+    (double* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes)
 };
 
 %apply(double* IN_ARRAY3, int DIM1, int DIM2, int DIM3){
@@ -47,10 +47,10 @@ namespace std {
     (double* spectrum_background, int len_background),
     (double* spectrum_target, int len_target),
     (double* spectrum_shade, int len_shade),
-    (double* grain_sizes, int len_grain_sizes),
-    (double* dust_concentrations, int len_dust_concentrations),
-    (double* solar_angles, int len_solar_angles),
-    (double* bands, int len_bands),
+    (double* lut_grain_sizes, int len_lut_grain_sizes),
+    (double* lut_dust_concentrations, int len_lut_dust_concentrations),
+    (double* lut_solar_angles, int len_lut_solar_angles),
+    (double* lut_bands, int len_lut_bands),
     (double* obs_solar_angles, int n_obs_solar_angles)   
 }
 
@@ -73,9 +73,9 @@ namespace std {
 }
 
 /* Output typemap for `double*` returns from interpolate_all_array.
-   Length is taken from `arg2` (n_bands), which is set by the IN_ARRAY4
-   typemap on the `lut` argument. The returned buffer was allocated with
-   `new double[n_bands]` in C++, so we transfer ownership to NumPy by
+   Length is taken from `arg2` (n_lut_bands), which is set by the IN_ARRAY4
+   typemap on the `lut_reflectances` argument. The returned buffer was allocated with
+   `new double[n_lut_bands]` in C++, so we transfer ownership to NumPy by
    wrapping it in a PyCapsule with a `delete[]` destructor and using that
    capsule as the array's base — this guarantees the buffer is freed when
    the NumPy array is deallocated, fixing the previous leak. */

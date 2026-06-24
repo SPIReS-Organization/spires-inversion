@@ -105,8 +105,8 @@ def speedy_invert(spectrum_target, spectrum_background, solar_angle, spectrum_sh
 
     return spires_inversion.core.invert(spectrum_background=spectrum_background, spectrum_target=spectrum_target,
                               spectrum_shade=spectrum_shade,
-                              solar_angle=solar_angle, bands=bands, solar_angles=solar_angles,
-                              dust_concentrations=dust_concentrations, grain_sizes=grain_sizes, lut=reflectances,
+                              solar_angle=solar_angle, lut_bands=bands, lut_solar_angles=solar_angles,
+                              lut_dust_concentrations=dust_concentrations, lut_grain_sizes=grain_sizes, lut_reflectances=reflectances,
                               max_eval=max_eval, x0=x0, algorithm=algorithm)
 
 
@@ -216,9 +216,9 @@ def speedy_invert_array1d(spectra_targets, spectra_backgrounds, obs_solar_angles
 
     spires_inversion.core.invert_array1d(spectra_targets=spectra_targets, spectra_backgrounds=spectra_backgrounds,
                                spectrum_shade=spectrum_shade,
-                               obs_solar_angles=obs_solar_angles, bands=bands, solar_angles=solar_angles,
-                               dust_concentrations=dust_concentrations,
-                               grain_sizes=grain_sizes, lut=reflectances, results=results,
+                               obs_solar_angles=obs_solar_angles, lut_bands=bands, lut_solar_angles=solar_angles,
+                               lut_dust_concentrations=dust_concentrations,
+                               lut_grain_sizes=grain_sizes, lut_reflectances=reflectances, results=results,
                                max_eval=max_eval, x0=x0, algorithm=algorithm)
     return results
 
@@ -321,8 +321,8 @@ def speedy_invert_array2d(spectra_targets, spectra_backgrounds, obs_solar_angles
                                spectra_targets=spectra_targets,
                                spectrum_shade=spectrum_shade,
                                obs_solar_angles=obs_solar_angles,
-                               bands=bands, solar_angles=solar_angles, dust_concentrations=dust_concentrations,
-                               grain_sizes=grain_sizes, lut=reflectances,
+                               lut_bands=bands, lut_solar_angles=solar_angles, lut_dust_concentrations=dust_concentrations,
+                               lut_grain_sizes=grain_sizes, lut_reflectances=reflectances,
                                results=results,
                                max_eval=max_eval,
                                x0=x0,
@@ -410,11 +410,11 @@ def speedy_invert_xarray(spectra_targets, spectra_backgrounds, obs_solar_angles,
     if spectrum_shade is None:
         spectrum_shade = np.zeros(spectra_targets.band.size, dtype=np.double)
    
-    bands = lut_dataarray.band
-    solar_angles = lut_dataarray.solar_angle
-    dust_concentrations = lut_dataarray.dust_concentration
-    grain_sizes = lut_dataarray.grain_size
-    reflectances = lut_dataarray.transpose('band', 'solar_angle', 'dust_concentration', 'grain_size').values
+    lut_bands = lut_dataarray.band
+    lut_solar_angles = lut_dataarray.solar_angle
+    lut_dust_concentrations = lut_dataarray.dust_concentration
+    lut_grain_sizes = lut_dataarray.grain_size
+    lut_reflectances = lut_dataarray.transpose('band', 'solar_angle', 'dust_concentration', 'grain_size').values
 
     results = np.empty((spectra_targets.y.size, spectra_targets.x.size, 4), dtype=np.double)
 
@@ -422,11 +422,11 @@ def speedy_invert_xarray(spectra_targets, spectra_backgrounds, obs_solar_angles,
                                spectra_targets=spectra_targets,
                                spectrum_shade=spectrum_shade,
                                obs_solar_angles=obs_solar_angles,
-                               bands=bands, 
-                               solar_angles=solar_angles, 
-                               dust_concentrations=dust_concentrations,
-                               grain_sizes=grain_sizes,
-                               lut=reflectances,
+                               lut_bands=lut_bands,
+                               lut_solar_angles=lut_solar_angles,
+                               lut_dust_concentrations=lut_dust_concentrations,
+                               lut_grain_sizes=lut_grain_sizes,
+                               lut_reflectances=lut_reflectances,
                                results=results,
                                max_eval=max_eval,
                                x0=x0,

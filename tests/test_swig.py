@@ -28,11 +28,11 @@ def test_interpolate_all():
 
 def test_interpolate_all_array():
     # this guy returns an array rather than a tuple
-    ret = spires_inversion.core.interpolate_all_array(lut=interpolator.reflectances,
-                                            bands=interpolator.bands,
-                                            solar_angles=interpolator.solar_angles,
-                                            dust_concentrations=interpolator.dust_concentrations,
-                                            grain_sizes=interpolator.grain_sizes,
+    ret = spires_inversion.core.interpolate_all_array(lut_reflectances=interpolator.reflectances,
+                                            lut_bands=interpolator.bands,
+                                            lut_solar_angles=interpolator.solar_angles,
+                                            lut_dust_concentrations=interpolator.dust_concentrations,
+                                            lut_grain_sizes=interpolator.grain_sizes,
                                             solar_angle=solar_angle,
                                             dust_concentration=dust_concentration,
                                             grain_size=grain_size)
@@ -48,11 +48,11 @@ def test_spectrum_difference():
                                           spectrum_target=spectrum_target,
                                           spectrum_shade=spectrum_shade,
                                           solar_angle=solar_angle,
-                                          bands=interpolator.bands,
-                                          solar_angles=interpolator.solar_angles,
-                                          dust_concentrations=interpolator.dust_concentrations,
-                                          grain_sizes=interpolator.grain_sizes,
-                                          lut=interpolator.reflectances)
+                                          lut_bands=interpolator.bands,
+                                          lut_solar_angles=interpolator.solar_angles,
+                                          lut_dust_concentrations=interpolator.dust_concentrations,
+                                          lut_grain_sizes=interpolator.grain_sizes,
+                                          lut_reflectances=interpolator.reflectances)
 
     assert pytest.approx(ret, rel=1e-2) == 0.08295740267234748
 
@@ -62,11 +62,11 @@ def test_invert():
                            spectrum_target=spectrum_target,
                            spectrum_shade=spectrum_shade,
                            solar_angle=solar_angle,
-                           bands=interpolator.bands,
-                           solar_angles=interpolator.solar_angles,
-                           dust_concentrations=interpolator.dust_concentrations,
-                           grain_sizes=interpolator.grain_sizes,
-                           lut=interpolator.reflectances,
+                           lut_bands=interpolator.bands,
+                           lut_solar_angles=interpolator.solar_angles,
+                           lut_dust_concentrations=interpolator.dust_concentrations,
+                           lut_grain_sizes=interpolator.grain_sizes,
+                           lut_reflectances=interpolator.reflectances,
                            max_eval=100,
                            x0=x0,
                            algorithm=1)
@@ -86,11 +86,11 @@ def test_invert_array():
                                spectra_targets=spectra_targets,
                                spectrum_shade=spectrum_shade,
                                obs_solar_angles=obs_solar_angles,
-                               bands=interpolator.bands,
-                               solar_angles=interpolator.solar_angles,
-                               dust_concentrations=interpolator.dust_concentrations,
-                               grain_sizes=interpolator.grain_sizes,
-                               lut=interpolator.reflectances,
+                               lut_bands=interpolator.bands,
+                               lut_solar_angles=interpolator.solar_angles,
+                               lut_dust_concentrations=interpolator.dust_concentrations,
+                               lut_grain_sizes=interpolator.grain_sizes,
+                               lut_reflectances=interpolator.reflectances,
                                results=results,
                                max_eval=100,
                                x0=x0,
@@ -166,11 +166,11 @@ def test_invert_array2d():
             spectrum_target=target,
             spectrum_shade=spectrum_shade,
             solar_angle=solar_angle,
-            bands=interpolator.bands,
-            solar_angles=interpolator.solar_angles,
-            dust_concentrations=interpolator.dust_concentrations,
-            grain_sizes=interpolator.grain_sizes,
-            lut=interpolator.reflectances)
+            lut_bands=interpolator.bands,
+            lut_solar_angles=interpolator.solar_angles,
+            lut_dust_concentrations=interpolator.dust_concentrations,
+            lut_grain_sizes=interpolator.grain_sizes,
+            lut_reflectances=interpolator.reflectances)
         assert residual < 0.05, f"row {row} residual {residual} too large"
 
 
@@ -192,11 +192,11 @@ def _residual(x, target, background):
         spectrum_target=target,
         spectrum_shade=np.zeros_like(target),
         solar_angle=solar_angle,
-        bands=interpolator.bands,
-        solar_angles=interpolator.solar_angles,
-        dust_concentrations=interpolator.dust_concentrations,
-        grain_sizes=interpolator.grain_sizes,
-        lut=interpolator.reflectances)
+        lut_bands=interpolator.bands,
+        lut_solar_angles=interpolator.solar_angles,
+        lut_dust_concentrations=interpolator.dust_concentrations,
+        lut_grain_sizes=interpolator.grain_sizes,
+        lut_reflectances=interpolator.reflectances)
 
 
 @pytest.mark.parametrize("algorithm,name", [(4, "NELDERMEAD-softmax"),
@@ -212,11 +212,11 @@ def test_invert_softmax(algorithm, name):
                            spectrum_target=spectrum_target,
                            spectrum_shade=spectrum_shade,
                            solar_angle=solar_angle,
-                           bands=interpolator.bands,
-                           solar_angles=interpolator.solar_angles,
-                           dust_concentrations=interpolator.dust_concentrations,
-                           grain_sizes=interpolator.grain_sizes,
-                           lut=interpolator.reflectances,
+                           lut_bands=interpolator.bands,
+                           lut_solar_angles=interpolator.solar_angles,
+                           lut_dust_concentrations=interpolator.dust_concentrations,
+                           lut_grain_sizes=interpolator.grain_sizes,
+                           lut_reflectances=interpolator.reflectances,
                            max_eval=500,
                            x0=x0,
                            algorithm=algorithm)
@@ -238,11 +238,11 @@ def test_invert_softmax(algorithm, name):
                                   spectrum_target=spectrum_target,
                                   spectrum_shade=spectrum_shade,
                                   solar_angle=solar_angle,
-                                  bands=interpolator.bands,
-                                  solar_angles=interpolator.solar_angles,
-                                  dust_concentrations=interpolator.dust_concentrations,
-                                  grain_sizes=interpolator.grain_sizes,
-                                  lut=interpolator.reflectances,
+                                  lut_bands=interpolator.bands,
+                                  lut_solar_angles=interpolator.solar_angles,
+                                  lut_dust_concentrations=interpolator.dust_concentrations,
+                                  lut_grain_sizes=interpolator.grain_sizes,
+                                  lut_reflectances=interpolator.reflectances,
                                   max_eval=500, x0=x0, algorithm=1)
     residual_cobyla = _residual(np.asarray(x_cobyla), spectrum_target, spectrum_background)
     assert residual_softmax <= residual_cobyla * 1.05, (
@@ -354,9 +354,9 @@ def test_invert_unknown_algorithm_raises():
                            spectrum_target=spectrum_target,
                            spectrum_shade=spectrum_shade,
                            solar_angle=solar_angle,
-                           bands=interpolator.bands,
-                           solar_angles=interpolator.solar_angles,
-                           dust_concentrations=interpolator.dust_concentrations,
-                           grain_sizes=interpolator.grain_sizes,
-                           lut=interpolator.reflectances,
+                           lut_bands=interpolator.bands,
+                           lut_solar_angles=interpolator.solar_angles,
+                           lut_dust_concentrations=interpolator.dust_concentrations,
+                           lut_grain_sizes=interpolator.grain_sizes,
+                           lut_reflectances=interpolator.reflectances,
                            max_eval=100, x0=x0, algorithm=99)
