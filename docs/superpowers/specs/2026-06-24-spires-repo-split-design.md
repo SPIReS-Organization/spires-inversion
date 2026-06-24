@@ -156,6 +156,26 @@ Derived from the existing `speedy_invert_xarray` docstring and call in
 - **TDD-friendly:** each contract is pure validation over small synthetic
   `DataArray`s — fast, no fixtures, no LUT files.
 
+### How the contract is used from both sides
+
+The contract is defined once and used to test **both directions** of each boundary:
+
+- **Producer side** (e.g. `spires-io`): test that its output passes the
+  validator — `validate_target_spectra(da)` must not raise.
+- **Consumer side** (e.g. `spires-inversion`): two obligations. (1) It must
+  accept *anything the contract permits* — its tests build conforming inputs,
+  certify them with `validate_target_spectra`, and assert the consumer handles
+  them (e.g. any legal dimension order). (2) As a producer of downstream data
+  (`results`), it gets a producer-side test against that boundary's validator.
+
+A contract validates **data**, not **behavior**: it eliminates shape/dtype/dim-
+naming mismatches at the seams, but each package still owns its own numerical/
+correctness tests.
+
+**Decision:** the contract stays minimal — `validate_*` + `conform_*` only. It
+will NOT ship shared "example builder" fixtures; each consumer/producer builds
+its own test fixtures and certifies them with the validators.
+
 ### Confirmed conventions
 
 - `src/` layout, import name `spires_contract`, repo name `spires-contract`.
