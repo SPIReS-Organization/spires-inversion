@@ -31,7 +31,10 @@ classifiers = [
     "Topic :: Scientific/Engineering :: GIS",
 ]
 dependencies = [
-    "spires-contract",
+    # contract validators are called at the speedy_invert_xarray boundary.
+    # Not yet on PyPI -> pinned tag from GitHub (swap for a version spec once
+    # it publishes).
+    "spires-contract @ git+https://github.com/SPIReS-Organization/spires-contract@v0.1.0",
     "numpy",
     "h5py",
     "scipy",

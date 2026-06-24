@@ -1,9 +1,9 @@
 import spires_inversion.interpolator
 import spires_inversion.core
 from spires_contract.spectra import (
-    conform_target_spectra,
-    conform_background_spectra,
-    conform_solar_angles,
+    validate_target_spectra,
+    validate_background_spectra,
+    validate_solar_angles,
 )
 import numpy as np
 import scipy
@@ -338,13 +338,19 @@ def speedy_invert_xarray(spectra_targets, spectra_backgrounds, obs_solar_angles,
     Batch inversion of snow reflectance spectra using xarray DataArrays.
 
     Provides a high-level interface for processing geospatial data with coordinate
-    information preserved. Automatically handles dimension ordering and metadata.
+    information preserved.
+
+    Inputs must already be in canonical form: spectra as ``(y, x, band)`` and
+    solar angles as ``(y, x)``, float64, with a ``band`` coordinate. The inputs
+    are checked against the ``spires_contract`` validators on entry (once per
+    call, not per pixel) and then passed to the C++ kernel as-is — this function
+    does not transpose or cast. A misshaped input raises a clear ``ContractError``
+    here rather than producing a cryptic failure inside the C++ kernel.
 
     Parameters
     ----------
     spectra_targets : xarray.DataArray
         Mixed spectra to invert with dimensions (y, x, band).
-        Will be automatically transposed if needed.
     spectra_backgrounds : xarray.DataArray
         Background (snow-free, R_0) spectra with dimensions (y, x, band).
         Must have same spatial dimensions as `spectra_targets`.
@@ -398,15 +404,19 @@ def speedy_invert_xarray(spectra_targets, spectra_backgrounds, obs_solar_angles,
     -----
     Currently returns a numpy array. Future versions will return an xarray.DataArray
     with appropriate coordinates and metadata (see TODO comment in code).
+
+    Raises
+    ------
+    spires_contract.ContractError
+        If an input violates the I/O->inversion contract (wrong dimension order,
+        missing/extra dimension, wrong dtype, or missing ``band`` coordinate).
+        Validation runs once per call, so a misshaped array fails with a clear
+        Python error here instead of a cryptic failure inside the C++ kernel.
     """
-    
-    # Conform inputs to the I/O->inversion contract: canonical dim order
-    # (y, x, band) / (y, x) and float64. Replaces the ad-hoc transposes that
-    # used to live here. See spires_contract.spectra.
-    spectra_targets = conform_target_spectra(spectra_targets)
-    spectra_backgrounds = conform_background_spectra(spectra_backgrounds)
-    obs_solar_angles = conform_solar_angles(obs_solar_angles)
-    
+    validate_target_spectra(spectra_targets)
+    validate_background_spectra(spectra_backgrounds)
+    validate_solar_angles(obs_solar_angles)
+
     if spectrum_shade is None:
         spectrum_shade = np.zeros(spectra_targets.band.size, dtype=np.double)
    
