@@ -183,6 +183,50 @@ its own test fixtures and certifies them with the validators.
 - Plain-function validators + `ContractError` (no schema library).
 - Build `conventions` + `_validate` + `spectra` fully; stub `lut`/`r0`/`results`.
 
+## Progress (2026-06-24, second session)
+
+Beyond `spires-contract`, the following were built and pushed:
+
+- **All 7 repos now exist** under `SPIReS-Organization`: `spires-contract`,
+  `spires-inversion`, `spires-io`, `spires-lut`, `spires-r0`,
+  `spires-postprocess` (the four new ones are public, minimal `src`-layout
+  scaffolds — pyproject pinning `spires-contract` + heavy deps, README,
+  package `__init__`), plus the `spires` **metapackage** (see below). The four
+  package scaffolds are intentionally **not** spec'd — collaborators own their
+  contents.
+- **Notebooks relocated** to their package repos' `examples/`: `01`, `02`,
+  `compress_nc` → io; `03` → r0; `04`, `06`, `07`, `08` → postprocess. Core
+  inversion + test notebooks stay in `spires-inversion`.
+- **`spires-contract` wired into `spires-inversion`**: `speedy_invert_xarray`
+  now conforms inputs via `spires_contract.spectra.conform_*` instead of ad-hoc
+  transposes; `spires-contract` added as a dependency. (Surfaced and fixed a
+  pre-existing `lut=`/`reflectances=` kwarg bug in that untested function.)
+- **Package renamed `spires` → `spires_inversion`** (import name) / dist
+  `spires-inversion`, freeing the `spires` name for the metapackage. SWIG/C++
+  extension renamed in lockstep; full suite green (27 passed).
+- **LUT C++/SWIG parameters prefixed `lut_`** (`bands`→`lut_bands`,
+  `lut`→`lut_reflectances`, etc.) to disambiguate from the spectra/observation
+  parameters beside them.
+
+## Distribution & docs (future)
+
+Direction agreed for getting the family onto PyPI / ReadTheDocs. Not executed
+beyond the metapackage scaffold; captured so it isn't lost.
+
+- **PyPI, per-package.** Each repo publishes independently
+  (`pip install spires-inversion`, `spires-io`, …) and pins a `spires-contract`
+  version range. Publish via **GitHub Actions + PyPI trusted publishing (OIDC)**
+  on tag — no long-lived API tokens.
+- **`spires` metapackage** (repo `SPIReS-Organization/spires`, built this
+  session). Thin distribution with **no importable module of its own** — the
+  import name `spires` is deliberately left free now that the engine imports as
+  `spires_inversion`. Default `pip install spires` → core
+  (`spires-contract` + `spires-inversion`); extras `spires[io|lut|r0|postprocess]`
+  and `spires[all]`. Versions unpinned until the packages release.
+- **ReadTheDocs.** Per-package Sphinx docs, unified as **RTD subprojects** under
+  a parent `spires` project (`spires.readthedocs.io/projects/spires-io/`),
+  cross-linked with `sphinx.ext.intersphinx`.
+
 ## Attribution
 
 Infrastructure / repo-split commits are authored by the user
@@ -194,8 +238,12 @@ added back.
 
 ## Out of Scope (future spec → plan cycles)
 
-- Extracting `spires-inversion` core out of the current package.
-- `spires-io`, `spires-lut`, `spires-r0`, `spires-postprocess` repos.
+- Extracting the actual `spires-io` / `spires-lut` / `spires-r0` /
+  `spires-postprocess` implementations into their (now-scaffolded) repos —
+  collaborators own these.
 - Additional contract submodules beyond `spectra` (i.e. `lut`, `r0`, `results`).
-- Pansharpening (nb 02), cloud masking (nb 04), animations (nb 08) placement.
+- Executing the distribution/docs plan above (PyPI trusted publishing, version
+  pinning, RTD subprojects).
+- Fork-detach of `spires-inversion`; coordinating with Ned on `edwardbair/SpiPy`;
+  Leidos GitLab mirror decision.
 ```
