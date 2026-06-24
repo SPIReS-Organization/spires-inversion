@@ -92,10 +92,14 @@ pythonpath = ["."]
 # Don't collect from examples (they require optional dependencies)
 norecursedirs = ["examples", "doc", "build", "dist", ".git", ".tox"]
 # Collect doctests from spires_inversion package
-addopts = "--doctest-modules --ignore=tests/example.py --ignore=spires_inversion/reprojectMODIS.py"
+addopts = "--doctest-modules --ignore=tests/example.py"
 # Configure doctest behavior
 doctest_optionflags = ["NORMALIZE_WHITESPACE", "ELLIPSIS"]
 # Only collect test files matching these patterns
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+# Custom markers
+markers = [
+    "flaky: timing/performance-sensitive test that may fail on noisy CI runners",
+]

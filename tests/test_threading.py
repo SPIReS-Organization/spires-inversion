@@ -54,14 +54,7 @@ def test_thread_pool_results_match_serial():
         threaded[0][0, 0], expected_per_pixel, rtol=1e-4)
 
 
-def test_threads_achieve_parallel_speedup():
-    """Wall-clock speedup proves the GIL is released during inversion.
-
-    If the GIL were held, threaded time would equal serial time. We require
-    a modest speedup (>1.4x with 4 threads) to leave headroom for noisy CI.
-    """
-    n_jobs = 8
-
+def _measure_speedup(n_jobs):
     t0 = time.perf_counter()
     for i in range(n_jobs):
         _invert_one(i)
@@ -72,8 +65,33 @@ def test_threads_achieve_parallel_speedup():
         list(ex.map(_invert_one, range(n_jobs)))
     threaded_time = time.perf_counter() - t0
 
-    speedup = serial_time / threaded_time
-    assert speedup > 1.4, (
-        f"Expected >1.4x speedup with 4 threads (GIL released), "
-        f"got {speedup:.2f}x (serial={serial_time:.2f}s, "
-        f"threaded={threaded_time:.2f}s)")
+    return serial_time / threaded_time, serial_time, threaded_time
+
+
+@pytest.mark.flaky
+def test_threads_achieve_parallel_speedup():
+    """Wall-clock speedup proves the GIL is released during inversion.
+
+    If the GIL were held, threaded time would equal serial time regardless of
+    runner load. This is a timing-sensitive test (marked ``flaky``): on noisy,
+    oversubscribed CI runners a single measurement can dip below threshold even
+    when the GIL is correctly released. To separate "GIL held" (a real bug,
+    every run is slow) from "runner is noisy" (one bad sample), we take the
+    BEST speedup over a few attempts and require a modest >1.4x.
+    """
+    n_jobs = 8
+    attempts = 3
+
+    best = 0.0
+    last = None
+    for _ in range(attempts):
+        speedup, serial_time, threaded_time = _measure_speedup(n_jobs)
+        last = (speedup, serial_time, threaded_time)
+        best = max(best, speedup)
+        if best > 1.4:
+            break
+
+    assert best > 1.4, (
+        f"Expected >1.4x speedup with 4 threads (GIL released) in the best of "
+        f"{attempts} attempts, got {best:.2f}x (last: serial={last[1]:.2f}s, "
+        f"threaded={last[2]:.2f}s)")
