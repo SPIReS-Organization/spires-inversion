@@ -29,3 +29,6 @@ __pycache__/
 tests/data/LUT_MODIS.mat
 tests/data/sentinel_r.nc
 tests/data/sentinel_r0.nc
+
+# Local Claude Code config
+.claude/
