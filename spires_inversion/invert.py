@@ -1,5 +1,10 @@
 import spires_inversion.interpolator
 import spires_inversion.core
+from spires_contract.spectra import (
+    conform_target_spectra,
+    conform_background_spectra,
+    conform_solar_angles,
+)
 import numpy as np
 import scipy
 
@@ -395,9 +400,12 @@ def speedy_invert_xarray(spectra_targets, spectra_backgrounds, obs_solar_angles,
     with appropriate coordinates and metadata (see TODO comment in code).
     """
     
-    spectra_targets = spectra_targets.transpose('y', 'x', 'band')
-    spectra_backgrounds = spectra_backgrounds.transpose('y', 'x', 'band')
-    obs_solar_angles = obs_solar_angles.transpose('y', 'x')
+    # Conform inputs to the I/O->inversion contract: canonical dim order
+    # (y, x, band) / (y, x) and float64. Replaces the ad-hoc transposes that
+    # used to live here. See spires_contract.spectra.
+    spectra_targets = conform_target_spectra(spectra_targets)
+    spectra_backgrounds = conform_background_spectra(spectra_backgrounds)
+    obs_solar_angles = conform_solar_angles(obs_solar_angles)
     
     if spectrum_shade is None:
         spectrum_shade = np.zeros(spectra_targets.band.size, dtype=np.double)
@@ -417,8 +425,8 @@ def speedy_invert_xarray(spectra_targets, spectra_backgrounds, obs_solar_angles,
                                bands=bands, 
                                solar_angles=solar_angles, 
                                dust_concentrations=dust_concentrations,
-                               grain_sizes=grain_sizes, 
-                               reflectances=reflectances,
+                               grain_sizes=grain_sizes,
+                               lut=reflectances,
                                results=results,
                                max_eval=max_eval,
                                x0=x0,
