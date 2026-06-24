@@ -19,20 +19,20 @@ cycle.
 
 ## A. Org Topology
 
-Six repos, each a pip-installable package. Dependencies point downward only
+Seven repos, each a pip-installable package. Dependencies point downward only
 (no cycles):
 
 ```
-                  spires-contract        ← numpy + xarray only
-                  (spectra, r0, results,
-                   shared conventions)
-                  /      |      \
-                 /       |       \
-       spires-io   spires-r0   spires-inversion   ← each pins a contract version
-      (rioxarray,  (xarray,    (numpy, scipy,
-       pyproj,      rioxarray)  C++/SWIG/nlopt)
-       gdal)            \         /
-                         \       /
+                       spires-contract        ← numpy + xarray only
+                       (spectra, lut, r0,
+                        results, conventions)
+                  /      /     |      \      \
+                 /      /      |       \      \
+       spires-io  spires-lut spires-r0  spires-inversion   ← each pins a contract version
+      (rioxarray, (xarray,   (xarray,   (numpy, scipy,
+       pyproj,     h5py)      rioxarray) C++/SWIG/nlopt)
+       gdal)          \        |         /
+                       \       |        /
                       spires-postprocess          ← clouds (scipy) + trees (torch, lama)
                             |
                      (consumes inversion
@@ -44,6 +44,7 @@ Six repos, each a pip-installable package. Dependencies point downward only
 | `spires-contract`    | All boundary schemas + shared conventions/validators         | numpy, xarray           |
 | `spires-inversion`   | Core: `invert`, `interpolator`, C++/SWIG, `utol`, dask       | numpy, scipy, nlopt     |
 | `spires-io`          | MODIS/Sentinel-2/Landsat loaders, reproject, transforms      | rioxarray, pyproj, gdal |
+| `spires-lut`         | Create / read / write reflectance lookup tables (LUTs)       | xarray, h5py            |
 | `spires-r0`          | Background (R_0) reflectance production                      | xarray, rioxarray       |
 | `spires-postprocess` | Cloud gap-fill, tree masking/inpainting                      | scipy, torch, lama      |
 
@@ -51,10 +52,10 @@ Six repos, each a pip-installable package. Dependencies point downward only
 
 - The contract is the **only** shared dependency. No package imports another
   package's internals; they exchange contract-validated xarray objects.
-- Each boundary (io→inversion, r0→inversion, inversion→postprocess) is a
-  **submodule** inside the single `spires-contract` package — not a separate
-  repo. This keeps shared conventions (dim names, ordering, units, dtype
-  rules) consistent and un-duplicated.
+- Each boundary (io→inversion, lut→inversion, r0→inversion,
+  inversion→postprocess) is a **submodule** inside the single `spires-contract`
+  package — not a separate repo. This keeps shared conventions (dim names,
+  ordering, units, dtype rules) consistent and un-duplicated.
 - Build **bottom-up**, starting with `spires-contract`.
 
 ## Migration Plan (GitHub-side)
@@ -104,6 +105,7 @@ spires-contract/                 # repo (hyphen)
     conventions.py               # shared: canonical dim names, ordering, units, dtype rules
     _validate.py                 # core validator machinery (collect-all-violations)
     spectra.py                   # I/O → inversion: target/background spectra  ← BUILD FIRST
+    lut.py                       # LUT → inversion: reflectance lookup table (STUB)
     r0.py                        # r0 → inversion: background reflectance (STUB)
     results.py                   # inversion → postprocess results (STUB)
   tests/
@@ -140,15 +142,17 @@ Derived from the existing `speedy_invert_xarray` docstring and call in
 
 - **Validators raise and collect all violations** (custom `ContractError`),
   giving producers one actionable message rather than whack-a-mole.
-- **Conventions centralized** in `conventions.py` so `r0`/`results` reuse the
-  same dim-name/units/dtype vocabulary — the reason one repo with submodules
-  beats one-repo-per-boundary.
+- **Conventions centralized** in `conventions.py` so `lut`/`r0`/`results` reuse
+  the same dim-name/units/dtype vocabulary — the reason one repo with submodules
+  beats one-repo-per-boundary. The LUT dims
+  `(band, solar_angle, dust_concentration, grain_size)` already live there, so
+  the `lut` boundary largely formalizes an existing convention.
 - **Validation style:** plain functions raising a custom `ContractError`, with
   **no schema-library dependency** (no pydantic/pandera). Keeps the package
   numpy+xarray-only and trivial to depend on.
 - **Scope for today:** fully build `conventions` + `_validate` + `spectra`
-  (with tests, TDD). `r0.py` and `results.py` are stubs with their spec
-  sketched, to be filled in when those repos are built.
+  (with tests, TDD). `lut.py`, `r0.py`, and `results.py` are stubs with their
+  spec sketched, to be filled in when those repos are built.
 - **TDD-friendly:** each contract is pure validation over small synthetic
   `DataArray`s — fast, no fixtures, no LUT files.
 
@@ -156,7 +160,7 @@ Derived from the existing `speedy_invert_xarray` docstring and call in
 
 - `src/` layout, import name `spires_contract`, repo name `spires-contract`.
 - Plain-function validators + `ContractError` (no schema library).
-- Build `conventions` + `_validate` + `spectra` fully; stub `r0`/`results`.
+- Build `conventions` + `_validate` + `spectra` fully; stub `lut`/`r0`/`results`.
 
 ## Attribution
 
@@ -170,7 +174,7 @@ added back.
 ## Out of Scope (future spec → plan cycles)
 
 - Extracting `spires-inversion` core out of the current package.
-- `spires-io`, `spires-r0`, `spires-postprocess` repos.
-- Additional contract submodules beyond `spectra` (i.e. `r0`, `results`).
+- `spires-io`, `spires-lut`, `spires-r0`, `spires-postprocess` repos.
+- Additional contract submodules beyond `spectra` (i.e. `lut`, `r0`, `results`).
 - Pansharpening (nb 02), cloud masking (nb 04), animations (nb 08) placement.
 ```
