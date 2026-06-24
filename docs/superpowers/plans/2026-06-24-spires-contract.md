@@ -6,7 +6,7 @@
 
 **Architecture:** A small `src/`-layout Python package depending only on numpy + xarray. A shared `conventions` module holds canonical dim names, dtype rules, and units vocabulary. A `_validate` module provides collect-all-violations machinery and a `ContractError`. Boundary modules (`spectra` first) declare required dims/coords/dtype and expose `validate_*` (raises, listing every violation) and `conform_*` (normalizer that transposes/casts to canonical form) functions.
 
-**Tech Stack:** Python ≥3.9, numpy, xarray, pytest. Conda env: `spipy14`. New repo lives at `/home/griessban/spires-contract` (sibling of `SpiPy`), pushed to `github.com/SPIReS-Organization/spires-contract`.
+**Tech Stack:** Python ≥3.9, numpy, xarray, pytest. Conda env: `spipy14`. New repo lives at `/home/griessban/spires/spires-contract` (sibling of `SpiPy`), pushed to `github.com/SPIReS-Organization/spires-contract`.
 
 **Attribution:** Commits authored by `niklas <niklas.griessbaum@leidos.com>`. Do NOT add a `Co-Authored-By: Claude` trailer on any commit in this plan (infrastructure seed commits — see design doc).
 
@@ -21,7 +21,7 @@
 ## File Structure
 
 ```
-spires-contract/                       # repo root (/home/griessban/spires-contract)
+spires-contract/                       # repo root (/home/griessban/spires/spires-contract)
   pyproject.toml                        # package metadata, deps: numpy, xarray; dev: pytest
   README.md                             # what the package is, install, usage
   .gitignore                            # python ignores
@@ -50,23 +50,23 @@ spires-contract/                       # repo root (/home/griessban/spires-contr
 ## Task 1: Scaffold the repo and packaging
 
 **Files:**
-- Create: `/home/griessban/spires-contract/pyproject.toml`
-- Create: `/home/griessban/spires-contract/.gitignore`
-- Create: `/home/griessban/spires-contract/README.md`
-- Create: `/home/griessban/spires-contract/src/spires_contract/__init__.py`
+- Create: `/home/griessban/spires/spires-contract/pyproject.toml`
+- Create: `/home/griessban/spires/spires-contract/.gitignore`
+- Create: `/home/griessban/spires/spires-contract/README.md`
+- Create: `/home/griessban/spires/spires-contract/src/spires_contract/__init__.py`
 
 - [ ] **Step 1: Create the repo directory and init git**
 
 Run:
 ```bash
-mkdir -p /home/griessban/spires-contract/src/spires_contract /home/griessban/spires-contract/tests
-cd /home/griessban/spires-contract && git init -b master
+mkdir -p /home/griessban/spires/spires-contract/src/spires_contract /home/griessban/spires/spires-contract/tests
+cd /home/griessban/spires/spires-contract && git init -b master
 ```
-Expected: `Initialized empty Git repository in /home/griessban/spires-contract/.git/`
+Expected: `Initialized empty Git repository in /home/griessban/spires/spires-contract/.git/`
 
 - [ ] **Step 2: Write `pyproject.toml`**
 
-Create `/home/griessban/spires-contract/pyproject.toml`:
+Create `/home/griessban/spires/spires-contract/pyproject.toml`:
 ```toml
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
@@ -103,7 +103,7 @@ pythonpath = ["src"]
 
 - [ ] **Step 3: Write `.gitignore`**
 
-Create `/home/griessban/spires-contract/.gitignore`:
+Create `/home/griessban/spires/spires-contract/.gitignore`:
 ```gitignore
 __pycache__/
 *.py[cod]
@@ -118,7 +118,7 @@ dist/
 
 - [ ] **Step 4: Write a minimal `README.md`**
 
-Create `/home/griessban/spires-contract/README.md`:
+Create `/home/griessban/spires/spires-contract/README.md`:
 ```markdown
 # spires-contract
 
@@ -155,7 +155,7 @@ da = spectra.conform_target_spectra(da)  # transpose/cast to canonical (y, x, ba
 
 - [ ] **Step 5: Write `__init__.py`**
 
-Create `/home/griessban/spires-contract/src/spires_contract/__init__.py`:
+Create `/home/griessban/spires/spires-contract/src/spires_contract/__init__.py`:
 ```python
 """spires-contract: data-interface contracts for the SPIReS package family."""
 
@@ -170,7 +170,7 @@ __all__ = ["ContractError", "__version__"]
 
 Run:
 ```bash
-cd /home/griessban/spires-contract && conda run -n spipy14 pip install -e . && conda run -n spipy14 python -c "import spires_contract; print(spires_contract.__version__)"
+cd /home/griessban/spires/spires-contract && conda run -n spipy14 pip install -e . && conda run -n spipy14 python -c "import spires_contract; print(spires_contract.__version__)"
 ```
 Expected: prints `0.1.0` (after a successful editable install).
 
@@ -179,7 +179,7 @@ Note: Step 6 imports `ContractError` from `_validate`, which is created in Task 
 - [ ] **Step 7: Commit**
 
 ```bash
-cd /home/griessban/spires-contract
+cd /home/griessban/spires/spires-contract
 git add pyproject.toml .gitignore README.md src/spires_contract/__init__.py
 git commit -m "Scaffold spires-contract package"
 ```
@@ -189,12 +189,12 @@ git commit -m "Scaffold spires-contract package"
 ## Task 2: Conventions module
 
 **Files:**
-- Create: `/home/griessban/spires-contract/src/spires_contract/conventions.py`
-- Test: `/home/griessban/spires-contract/tests/test_conventions.py`
+- Create: `/home/griessban/spires/spires-contract/src/spires_contract/conventions.py`
+- Test: `/home/griessban/spires/spires-contract/tests/test_conventions.py`
 
 - [ ] **Step 1: Write the failing test**
 
-Create `/home/griessban/spires-contract/tests/test_conventions.py`:
+Create `/home/griessban/spires/spires-contract/tests/test_conventions.py`:
 ```python
 import numpy as np
 from spires_contract import conventions as c
@@ -222,12 +222,12 @@ def test_required_dtype_is_float64():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /home/griessban/spires-contract && conda run -n spipy14 pytest tests/test_conventions.py -v`
+Run: `cd /home/griessban/spires/spires-contract && conda run -n spipy14 pytest tests/test_conventions.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'spires_contract.conventions'` (or AttributeError).
 
 - [ ] **Step 3: Write minimal implementation**
 
-Create `/home/griessban/spires-contract/src/spires_contract/conventions.py`:
+Create `/home/griessban/spires/spires-contract/src/spires_contract/conventions.py`:
 ```python
 """Canonical naming and dtype conventions shared across all SPIReS contracts.
 
@@ -255,13 +255,13 @@ REQUIRED_DTYPE = np.float64
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /home/griessban/spires-contract && conda run -n spipy14 pytest tests/test_conventions.py -v`
+Run: `cd /home/griessban/spires/spires-contract && conda run -n spipy14 pytest tests/test_conventions.py -v`
 Expected: PASS (5 passed).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cd /home/griessban/spires-contract
+cd /home/griessban/spires/spires-contract
 git add src/spires_contract/conventions.py tests/test_conventions.py
 git commit -m "Add shared naming/dtype conventions"
 ```
@@ -271,13 +271,13 @@ git commit -m "Add shared naming/dtype conventions"
 ## Task 3: Validation machinery (`_validate`)
 
 **Files:**
-- Create: `/home/griessban/spires-contract/src/spires_contract/_validate.py`
-- Modify: `/home/griessban/spires-contract/src/spires_contract/__init__.py`
-- Test: `/home/griessban/spires-contract/tests/test_validate.py`
+- Create: `/home/griessban/spires/spires-contract/src/spires_contract/_validate.py`
+- Modify: `/home/griessban/spires/spires-contract/src/spires_contract/__init__.py`
+- Test: `/home/griessban/spires/spires-contract/tests/test_validate.py`
 
 - [ ] **Step 1: Write the failing test**
 
-Create `/home/griessban/spires-contract/tests/test_validate.py`:
+Create `/home/griessban/spires/spires-contract/tests/test_validate.py`:
 ```python
 import numpy as np
 import pytest
@@ -348,12 +348,12 @@ def test_raise_if_violations_silent_when_empty():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /home/griessban/spires-contract && conda run -n spipy14 pytest tests/test_validate.py -v`
+Run: `cd /home/griessban/spires/spires-contract && conda run -n spipy14 pytest tests/test_validate.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'spires_contract._validate'`.
 
 - [ ] **Step 3: Write minimal implementation**
 
-Create `/home/griessban/spires-contract/src/spires_contract/_validate.py`:
+Create `/home/griessban/spires/spires-contract/src/spires_contract/_validate.py`:
 ```python
 """Reusable validation primitives shared by all boundary contracts.
 
@@ -407,12 +407,12 @@ def raise_if_violations(contract_name, violations):
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /home/griessban/spires-contract && conda run -n spipy14 pytest tests/test_validate.py -v`
+Run: `cd /home/griessban/spires/spires-contract && conda run -n spipy14 pytest tests/test_validate.py -v`
 Expected: PASS (8 passed).
 
 - [ ] **Step 5: Ensure `__init__.py` re-exports `ContractError`**
 
-Confirm `/home/griessban/spires-contract/src/spires_contract/__init__.py` contains (restore if commented out in Task 1 Step 6):
+Confirm `/home/griessban/spires/spires-contract/src/spires_contract/__init__.py` contains (restore if commented out in Task 1 Step 6):
 ```python
 """spires-contract: data-interface contracts for the SPIReS package family."""
 
@@ -425,13 +425,13 @@ __all__ = ["ContractError", "__version__"]
 
 - [ ] **Step 6: Verify top-level import works**
 
-Run: `cd /home/griessban/spires-contract && conda run -n spipy14 python -c "from spires_contract import ContractError; print(ContractError)"`
+Run: `cd /home/griessban/spires/spires-contract && conda run -n spipy14 python -c "from spires_contract import ContractError; print(ContractError)"`
 Expected: prints `<class 'spires_contract._validate.ContractError'>`.
 
 - [ ] **Step 7: Commit**
 
 ```bash
-cd /home/griessban/spires-contract
+cd /home/griessban/spires/spires-contract
 git add src/spires_contract/_validate.py src/spires_contract/__init__.py tests/test_validate.py
 git commit -m "Add validation primitives and ContractError"
 ```
@@ -441,12 +441,12 @@ git commit -m "Add validation primitives and ContractError"
 ## Task 4: Spectra contract — validators
 
 **Files:**
-- Create: `/home/griessban/spires-contract/src/spires_contract/spectra.py`
-- Test: `/home/griessban/spires-contract/tests/test_spectra.py`
+- Create: `/home/griessban/spires/spires-contract/src/spires_contract/spectra.py`
+- Test: `/home/griessban/spires/spires-contract/tests/test_spectra.py`
 
 - [ ] **Step 1: Write the failing test**
 
-Create `/home/griessban/spires-contract/tests/test_spectra.py`:
+Create `/home/griessban/spires/spires-contract/tests/test_spectra.py`:
 ```python
 import numpy as np
 import pytest
@@ -524,12 +524,12 @@ def test_validate_solar_angles_rejects_band_dim():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /home/griessban/spires-contract && conda run -n spipy14 pytest tests/test_spectra.py -v`
+Run: `cd /home/griessban/spires/spires-contract && conda run -n spipy14 pytest tests/test_spectra.py -v`
 Expected: FAIL with `ImportError: cannot import name 'spectra'` (or ModuleNotFound).
 
 - [ ] **Step 3: Write minimal implementation**
 
-Create `/home/griessban/spires-contract/src/spires_contract/spectra.py`:
+Create `/home/griessban/spires/spires-contract/src/spires_contract/spectra.py`:
 ```python
 """I/O -> inversion boundary contract: target/background spectra + solar angles.
 
@@ -583,13 +583,13 @@ def validate_solar_angles(da):
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /home/griessban/spires-contract && conda run -n spipy14 pytest tests/test_spectra.py -v`
+Run: `cd /home/griessban/spires/spires-contract && conda run -n spipy14 pytest tests/test_spectra.py -v`
 Expected: PASS (9 passed).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cd /home/griessban/spires-contract
+cd /home/griessban/spires/spires-contract
 git add src/spires_contract/spectra.py tests/test_spectra.py
 git commit -m "Add spectra boundary validators"
 ```
@@ -599,12 +599,12 @@ git commit -m "Add spectra boundary validators"
 ## Task 5: Spectra contract — conform/normalize helpers
 
 **Files:**
-- Modify: `/home/griessban/spires-contract/src/spires_contract/spectra.py`
-- Test: `/home/griessban/spires-contract/tests/test_spectra.py` (append)
+- Modify: `/home/griessban/spires/spires-contract/src/spires_contract/spectra.py`
+- Test: `/home/griessban/spires/spires-contract/tests/test_spectra.py` (append)
 
 - [ ] **Step 1: Write the failing test (append to test_spectra.py)**
 
-Append to `/home/griessban/spires-contract/tests/test_spectra.py`:
+Append to `/home/griessban/spires/spires-contract/tests/test_spectra.py`:
 ```python
 def test_conform_target_spectra_transposes_to_canonical_order():
     da = make_target(dims=("band", "y", "x"))
@@ -640,12 +640,12 @@ def test_conform_target_spectra_raises_when_dim_absent():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /home/griessban/spires-contract && conda run -n spipy14 pytest tests/test_spectra.py -k conform -v`
+Run: `cd /home/griessban/spires/spires-contract && conda run -n spipy14 pytest tests/test_spectra.py -k conform -v`
 Expected: FAIL with `AttributeError: module 'spires_contract.spectra' has no attribute 'conform_target_spectra'`.
 
 - [ ] **Step 3: Write minimal implementation (append to spectra.py)**
 
-Append to `/home/griessban/spires-contract/src/spires_contract/spectra.py`:
+Append to `/home/griessban/spires/spires-contract/src/spires_contract/spectra.py`:
 ```python
 def _conform_spectra(da, contract_name):
     # A missing dimension cannot be repaired by transpose/cast — fail clearly.
@@ -673,13 +673,13 @@ def conform_solar_angles(da):
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /home/griessban/spires-contract && conda run -n spipy14 pytest tests/test_spectra.py -v`
+Run: `cd /home/griessban/spires/spires-contract && conda run -n spipy14 pytest tests/test_spectra.py -v`
 Expected: PASS (14 passed — 9 from Task 4 + 5 new).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cd /home/griessban/spires-contract
+cd /home/griessban/spires/spires-contract
 git add src/spires_contract/spectra.py tests/test_spectra.py
 git commit -m "Add spectra conform/normalize helpers"
 ```
@@ -689,13 +689,13 @@ git commit -m "Add spectra conform/normalize helpers"
 ## Task 6: Stub the lut, r0, and results boundaries
 
 **Files:**
-- Create: `/home/griessban/spires-contract/src/spires_contract/lut.py`
-- Create: `/home/griessban/spires-contract/src/spires_contract/r0.py`
-- Create: `/home/griessban/spires-contract/src/spires_contract/results.py`
+- Create: `/home/griessban/spires/spires-contract/src/spires_contract/lut.py`
+- Create: `/home/griessban/spires/spires-contract/src/spires_contract/r0.py`
+- Create: `/home/griessban/spires/spires-contract/src/spires_contract/results.py`
 
 - [ ] **Step 1: Write `lut.py` stub**
 
-Create `/home/griessban/spires-contract/src/spires_contract/lut.py`:
+Create `/home/griessban/spires/spires-contract/src/spires_contract/lut.py`:
 ```python
 """LUT -> inversion boundary contract (STUB — not yet implemented).
 
@@ -719,7 +719,7 @@ def validate_lut(da):
 
 - [ ] **Step 2: Write `r0.py` stub**
 
-Create `/home/griessban/spires-contract/src/spires_contract/r0.py`:
+Create `/home/griessban/spires/spires-contract/src/spires_contract/r0.py`:
 ```python
 """R_0 -> inversion boundary contract (STUB — not yet implemented).
 
@@ -741,7 +741,7 @@ def validate_r0(da):
 
 - [ ] **Step 3: Write `results.py` stub**
 
-Create `/home/griessban/spires-contract/src/spires_contract/results.py`:
+Create `/home/griessban/spires/spires-contract/src/spires_contract/results.py`:
 ```python
 """inversion -> postprocess boundary contract (STUB — not yet implemented).
 
@@ -766,7 +766,7 @@ def validate_results(ds):
 
 Run:
 ```bash
-cd /home/griessban/spires-contract && conda run -n spipy14 python -c "
+cd /home/griessban/spires/spires-contract && conda run -n spipy14 python -c "
 import spires_contract.lut as lut, spires_contract.r0 as r0, spires_contract.results as res
 for fn in [lut.validate_lut, r0.validate_r0, res.validate_results]:
     try:
@@ -780,7 +780,7 @@ Expected: three `OK:` lines.
 - [ ] **Step 5: Commit**
 
 ```bash
-cd /home/griessban/spires-contract
+cd /home/griessban/spires/spires-contract
 git add src/spires_contract/lut.py src/spires_contract/r0.py src/spires_contract/results.py
 git commit -m "Stub lut, r0, and results boundary contracts"
 ```
@@ -793,14 +793,14 @@ git commit -m "Stub lut, r0, and results boundary contracts"
 
 - [ ] **Step 1: Run the full test suite**
 
-Run: `cd /home/griessban/spires-contract && conda run -n spipy14 pytest -v`
+Run: `cd /home/griessban/spires/spires-contract && conda run -n spipy14 pytest -v`
 Expected: PASS (27 tests: 5 conventions + 8 validate + 14 spectra). 0 failures.
 
 - [ ] **Step 2: Verify a clean editable install + import surface**
 
 Run:
 ```bash
-cd /home/griessban/spires-contract && conda run -n spipy14 pip install -e . >/dev/null && conda run -n spipy14 python -c "
+cd /home/griessban/spires/spires-contract && conda run -n spipy14 pip install -e . >/dev/null && conda run -n spipy14 python -c "
 import spires_contract as sc
 import spires_contract.spectra as spectra
 print('version:', sc.__version__)
@@ -814,7 +814,7 @@ Expected: prints version `0.1.0`, `ContractError`, and the six `validate_*`/`con
 
 Run (requires `gh` authenticated; `spipy14` env):
 ```bash
-cd /home/griessban/spires-contract && conda run -n spipy14 gh repo create SPIReS-Organization/spires-contract --private --source=. --remote=org --description "Data-interface contracts (xarray schemas + validators) for the SPIReS package family"
+cd /home/griessban/spires/spires-contract && conda run -n spipy14 gh repo create SPIReS-Organization/spires-contract --private --source=. --remote=org --description "Data-interface contracts (xarray schemas + validators) for the SPIReS package family"
 ```
 Expected: repo created; remote `org` added. If `gh` is unavailable or unauthenticated, STOP and ask the user to create the empty repo, then `git remote add org https://github.com/SPIReS-Organization/spires-contract.git`.
 
@@ -822,12 +822,12 @@ Note: `--private` vs `--public` — confirm with the user before running (defaul
 
 - [ ] **Step 4: Push**
 
-Run: `cd /home/griessban/spires-contract && git push -u org master`
+Run: `cd /home/griessban/spires/spires-contract && git push -u org master`
 Expected: branch `master` pushed; upstream set.
 
 - [ ] **Step 5: Confirm the remote has the commits**
 
-Run: `cd /home/griessban/spires-contract && git log --oneline origin/master 2>/dev/null || git log --oneline org/master`
+Run: `cd /home/griessban/spires/spires-contract && git log --oneline origin/master 2>/dev/null || git log --oneline org/master`
 Expected: lists all task commits, authored by `niklas` with no `Co-Authored-By: Claude` trailer.
 
 ---
