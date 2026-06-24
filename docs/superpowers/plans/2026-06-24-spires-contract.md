@@ -814,11 +814,11 @@ Expected: prints version `0.1.0`, `ContractError`, and the six `validate_*`/`con
 
 Run (requires `gh` authenticated; `spipy14` env):
 ```bash
-cd /home/griessban/spires/spires-contract && conda run -n spipy14 gh repo create SPIReS-Organization/spires-contract --private --source=. --remote=org --description "Data-interface contracts (xarray schemas + validators) for the SPIReS package family"
+cd /home/griessban/spires/spires-contract && conda run -n spipy14 gh repo create SPIReS-Organization/spires-contract --public --source=. --remote=org --description "Data-interface contracts (xarray schemas + validators) for the SPIReS package family"
 ```
 Expected: repo created; remote `org` added. If `gh` is unavailable or unauthenticated, STOP and ask the user to create the empty repo, then `git remote add org https://github.com/SPIReS-Organization/spires-contract.git`.
 
-Note: `--private` vs `--public` — confirm with the user before running (default to `--private` if unsure).
+Note: visibility confirmed **public** by the user (2026-06-24).
 
 - [ ] **Step 4: Push**
 
