@@ -32,3 +32,6 @@ tests/data/sentinel_r0.nc
 
 # Local Claude Code config
 .claude/
+
+# superpowers planning/specs (local only; real Sphinx docs live in doc/)
+docs/
