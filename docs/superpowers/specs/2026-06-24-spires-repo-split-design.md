@@ -34,6 +34,7 @@ Seven repos, each a pip-installable package. Dependencies point downward only
        gdal)          \        |         /
                        \       |        /
                       spires-postprocess          ← clouds (scipy) + trees (torch, lama)
+                      
                             |
                      (consumes inversion
                       results contract)
