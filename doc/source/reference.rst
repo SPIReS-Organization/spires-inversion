@@ -16,6 +16,9 @@ namespace plus those listed in the reference are public.
 .. automodsumm:: spires_inversion.parallel
    :template: instance_methods.rst
 
+.. automodsumm:: spires_inversion.grouping
+   :template: instance_methods.rst
+
 .. automodsumm:: spires_inversion.utol
    :template: instance_methods.rst
 
@@ -33,6 +36,11 @@ namespace plus those listed in the reference are public.
    :show-inheritance:
 
 .. automodule:: spires_inversion.parallel
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: spires_inversion.grouping
    :members:
    :undoc-members:
    :show-inheritance:

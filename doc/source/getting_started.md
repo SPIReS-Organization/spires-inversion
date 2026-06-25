@@ -168,6 +168,110 @@ with Client(n_workers=4, threads_per_worker=4) as client:
 
 See `examples/05_sentinel_snow_inversion.ipynb` for a complete dask workflow.
 
+#### Pixel grouping for faster inversion
+
+Pixel grouping is disabled by default. With `use_grouping=False`,
+`speedy_invert_array2d` and `speedy_invert_dask` invert every valid pixel
+independently. Set `use_grouping=True` to group similar spectra, invert one
+representative spectrum per group, and scatter the representative result back
+to all pixels in that group.
+
+```python
+import numpy as np
+
+ds = spires_inversion.speedy_invert_dask(
+    spectra_targets=targets,
+    spectra_backgrounds=backgrounds,
+    obs_solar_angles=solar_angles,
+    interpolator=interpolator,
+    use_grouping=True,
+    grouping_scope="scene",
+    grouping_method="mean_of_pixels",
+    grouping_tolerance=0.02,
+)
+```
+
+The grouping controls separate *where grouping is allowed* from *how the
+representative spectrum is chosen*:
+
+- `grouping_scope="scene"` groups within each scene/time slice. For a single
+  scene with shape `(y, x, band)`, this groups within that scene. For a time
+  cube with shape `(time, y, x, band)`, each time slice is grouped separately.
+- `grouping_scope="chunk"` groups across all non-band dimensions inside the
+  current Dask chunk. For a time cube, pixels from different times may share a
+  representative inversion when target spectra, R_0 spectra, and solar zenith
+  fall in the same grouping bin.
+- `grouping_method="mean_of_pixels"` inverts the arithmetic mean target,
+  background, and solar-zenith values for each group.
+- `grouping_method="first_pixel"` inverts the first valid pixel encountered in
+  each group.
+
+Static and time-varying backgrounds are both supported:
+
+- Static R_0: `(y, x, band)`
+- Time-varying R_0: `(time, y, x, band)`
+
+When `grouping_scope="chunk"` and the target has a time dimension, a static
+R_0 array is broadcast inside each chunk before grouping. This also handles
+time cubes where a chunk contains only one time step.
+
+Grouping bins are controlled by tolerances:
+
+- `grouping_tolerance=0.02` is the default fallback for reflectance-like
+  values.
+- `grouping_reflectance_tol=None` uses `grouping_tolerance` for observed
+  target reflectance.
+- `grouping_background_tol=None` uses `grouping_tolerance` for R_0 background
+  reflectance.
+- `grouping_solar_zenith_tol=None` uses `grouping_tolerance * 100`, so the
+  default solar-zenith tolerance is 2 degrees.
+
+Reflectance and background tolerances may be scalars or per-band arrays. For
+example:
+
+```python
+ds = spires_inversion.speedy_invert_dask(
+    spectra_targets=targets,
+    spectra_backgrounds=backgrounds,
+    obs_solar_angles=solar_angles,
+    interpolator=interpolator,
+    use_grouping=True,
+    grouping_scope="chunk",
+    grouping_method="mean_of_pixels",
+    grouping_reflectance_tol=np.array([0.015, 0.015, 0.02, 0.02]),
+    grouping_background_tol=0.03,
+    grouping_solar_zenith_tol=1.5,
+)
+```
+
+Use `valid_mask` to skip pixels before grouping:
+
+```python
+ds = spires_inversion.speedy_invert_dask(
+    spectra_targets=targets,
+    spectra_backgrounds=backgrounds,
+    obs_solar_angles=solar_angles,
+    interpolator=interpolator,
+    valid_mask=clear_snow_mask,
+    use_grouping=True,
+)
+```
+
+Pixels excluded by `valid_mask`, or by non-finite target/R_0/solar values, are
+not inverted and are returned as `NaN`.
+
+Grouped Dask outputs include provenance attributes:
+
+```python
+ds.attrs["grouping_enabled"]
+ds.attrs["grouping_scope"]
+ds.attrs["grouping_method"]
+ds.attrs["grouping_tolerance"]
+ds.attrs["grouping_reflectance_tol"]
+ds.attrs["grouping_background_tol"]
+ds.attrs["grouping_solar_zenith_tol"]
+```
+
 ## Understanding the Algorithm
 
 SPIRES (SPectral Inversion of REflectance from Snow) retrieves snow properties by:

@@ -1,5 +1,6 @@
 import spires_inversion.interpolator
 import spires_inversion.core
+from spires_inversion.grouping import group_spectra_block, scatter_group_results_block
 from spires_contract.spectra import (
     validate_target_spectra,
     validate_background_spectra,
@@ -223,8 +224,63 @@ def speedy_invert_array1d(spectra_targets, spectra_backgrounds, obs_solar_angles
     return results
 
 
+def _speedy_invert_grouped_block(
+    spectra_targets,
+    spectra_backgrounds,
+    obs_solar_angles,
+    *,
+    spectrum_shade,
+    bands,
+    solar_angles,
+    dust_concentrations,
+    grain_sizes,
+    reflectances,
+    max_eval,
+    x0,
+    algorithm,
+    valid_mask=None,
+    grouping_method="mean_of_pixels",
+    grouping_tolerance=0.02,
+    grouping_reflectance_tol=None,
+    grouping_background_tol=None,
+    grouping_solar_zenith_tol=None,
+):
+    grouped = group_spectra_block(
+        spectra_targets,
+        spectra_backgrounds,
+        obs_solar_angles,
+        valid_mask=valid_mask,
+        representative_method=grouping_method,
+        tolerance=grouping_tolerance,
+        reflectance_tol=grouping_reflectance_tol,
+        background_tol=grouping_background_tol,
+        solar_zenith_tol=grouping_solar_zenith_tol,
+    )
+    if grouped.n_groups == 0:
+        return np.full(grouped.original_shape[:-1] + (4,), np.nan, dtype=np.double)
+
+    grouped_results = speedy_invert_array1d(
+        spectra_targets=grouped.representative_targets,
+        spectra_backgrounds=grouped.representative_backgrounds,
+        obs_solar_angles=grouped.representative_solar_zenith,
+        spectrum_shade=spectrum_shade,
+        bands=bands,
+        solar_angles=solar_angles,
+        dust_concentrations=dust_concentrations,
+        grain_sizes=grain_sizes,
+        reflectances=reflectances,
+        max_eval=max_eval,
+        x0=x0,
+        algorithm=algorithm,
+    )
+    return scatter_group_results_block(grouped, grouped_results, fill_value=np.nan)
+
+
 def speedy_invert_array2d(spectra_targets, spectra_backgrounds, obs_solar_angles, max_eval=100, x0=np.array([0.5, 0.05, 10, 250]), algorithm=2,
-                          bands=None, solar_angles=None, dust_concentrations=None, grain_sizes=None, reflectances=None, interpolator=None):
+                          bands=None, solar_angles=None, dust_concentrations=None, grain_sizes=None, reflectances=None, interpolator=None,
+                          spectrum_shade=None, valid_mask=None, use_grouping=False, grouping_method="mean_of_pixels",
+                          grouping_tolerance=0.02, grouping_reflectance_tol=None, grouping_background_tol=None,
+                          grouping_solar_zenith_tol=None):
     """
     Batch inversion of snow reflectance spectra for 2D spatial arrays.
 
@@ -286,6 +342,15 @@ def speedy_invert_array2d(spectra_targets, spectra_backgrounds, obs_solar_angles
         dust_concentrations, grain_sizes). Required if interpolator not provided.
     interpolator : spires_inversion.interpolator.LutInterpolator, optional
         Pre-configured interpolator. If provided, overrides individual LUT parameters.
+    spectrum_shade : numpy.ndarray, optional
+        1D array representing the ideal shaded spectrum for all pixels.
+        Must have same length as number of bands. If None, uses zeros.
+    valid_mask : numpy.ndarray, optional
+        Boolean mask with shape (ny, nx). Only used when ``use_grouping=True``.
+    use_grouping : bool, optional
+        If True, invert representative grouped spectra and scatter results back.
+    grouping_method : str, optional
+        Representative selection method: ``"mean_of_pixels"`` or ``"first_pixel"``.
 
     Returns
     -------
@@ -298,14 +363,14 @@ def speedy_invert_array2d(spectra_targets, spectra_backgrounds, obs_solar_angles
 
     Notes
     -----
-    The shade spectrum is automatically set to zeros for all pixels. Future versions
-    may support spatially-varying shade spectra.
+    The shade spectrum is automatically set to zeros for all pixels when
+    ``spectrum_shade`` is not provided.
     """
     
-    spectrum_shade = np.zeros(spectra_targets.shape[-1], dtype=np.double)
-    
     if spectrum_shade is None:
-        spectrum_shade = np.zeros_like(spectra_targets[0])
+        spectrum_shade = np.zeros(spectra_targets.shape[-1], dtype=np.double)
+    else:
+        spectrum_shade = np.asarray(spectrum_shade, dtype=np.double)
 
     if interpolator is not None:
         bands = interpolator.bands
@@ -313,6 +378,28 @@ def speedy_invert_array2d(spectra_targets, spectra_backgrounds, obs_solar_angles
         dust_concentrations = interpolator.dust_concentrations
         grain_sizes = interpolator.grain_sizes
         reflectances = interpolator.reflectances
+
+    if use_grouping:
+        return _speedy_invert_grouped_block(
+            spectra_targets=spectra_targets,
+            spectra_backgrounds=spectra_backgrounds,
+            obs_solar_angles=obs_solar_angles,
+            spectrum_shade=spectrum_shade,
+            bands=bands,
+            solar_angles=solar_angles,
+            dust_concentrations=dust_concentrations,
+            grain_sizes=grain_sizes,
+            reflectances=reflectances,
+            max_eval=max_eval,
+            x0=x0,
+            algorithm=algorithm,
+            valid_mask=valid_mask,
+            grouping_method=grouping_method,
+            grouping_tolerance=grouping_tolerance,
+            grouping_reflectance_tol=grouping_reflectance_tol,
+            grouping_background_tol=grouping_background_tol,
+            grouping_solar_zenith_tol=grouping_solar_zenith_tol,
+        )
 
     results = np.empty((spectra_targets.shape[0], spectra_targets.shape[1], 4), dtype=np.double)
 
