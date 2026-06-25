@@ -103,6 +103,32 @@ fsca, fshade, dust, grain_size = spires_inversion.speedy_invert(
 See [Getting Started](https://spipy.readthedocs.io/en/latest/getting_started.html) for batch
 processing, xarray, and Dask-parallel workflows.
 
+### Pixel grouping
+
+Pixel grouping is opt-in. By default, `speedy_invert_array2d` and
+`speedy_invert_dask` invert every valid pixel independently
+(`use_grouping=False`). Enable grouping to invert one representative spectrum
+per similar pixel group, then scatter the result back to each original pixel.
+
+```python
+ds = spires.speedy_invert_dask(
+    spectra_targets=targets,
+    spectra_backgrounds=backgrounds,
+    obs_solar_angles=solar_angles,
+    interpolator=interpolator,
+    use_grouping=True,
+    grouping_scope="scene",
+    grouping_method="group_mean",
+    grouping_tolerance=0.02,
+)
+```
+
+`grouping_scope="scene"` groups within each scene/time slice. Use
+`grouping_scope="chunk"` to group across all non-band dimensions in each Dask
+chunk, including time. `grouping_method` can be `"group_mean"` or
+`"first_pixel"`. Non-finite inputs and pixels excluded by `valid_mask` are
+skipped and returned as `NaN`.
+
 ## Development
 
 ### Building Wheels

@@ -1,7 +1,7 @@
 """Dask-parallel inversion of snow reflectance spectra."""
 import numpy as np
 
-from spires_inversion.invert import speedy_invert_array2d
+from spires_inversion.invert import _speedy_invert_grouped_block, speedy_invert_array2d
 
 
 _VARIABLE_ATTRS = {
@@ -65,15 +65,35 @@ def _scatter_lut(client, reflectances, dask):
     )
 
 
-def _make_invert_chunk(max_eval, x0, algorithm):
+def _make_invert_chunk(
+    max_eval,
+    x0,
+    algorithm,
+    spectrum_shade,
+    valid_mask_present,
+    use_grouping,
+    grouping_scope,
+    grouping_method,
+    grouping_tolerance,
+    grouping_reflectance_tol,
+    grouping_background_tol,
+    grouping_solar_zenith_tol,
+):
     """Build the per-chunk inversion function passed to apply_ufunc.
 
     Handles both the no-time (3D) and with-time (4D) layouts that
     apply_ufunc may hand to a single chunk.
     """
-    def _invert(spectra_targets, spectra_backgrounds, obs_solar_angles,
-                bands, solar_angles, dust, grain, reflectances):
+    def _invert(spectra_targets, spectra_backgrounds, obs_solar_angles, *args):
+        if valid_mask_present:
+            valid_mask = args[0]
+            args = args[1:]
+        else:
+            valid_mask = None
+        bands, solar_angles, dust, grain, reflectances = args
+
         common = dict(
+            spectrum_shade=spectrum_shade,
             bands=bands,
             solar_angles=solar_angles,
             dust_concentrations=dust,
@@ -82,17 +102,47 @@ def _make_invert_chunk(max_eval, x0, algorithm):
             max_eval=max_eval,
             x0=x0,
             algorithm=algorithm,
+            use_grouping=use_grouping,
+            grouping_method=grouping_method,
+            grouping_tolerance=grouping_tolerance,
+            grouping_reflectance_tol=grouping_reflectance_tol,
+            grouping_background_tol=grouping_background_tol,
+            grouping_solar_zenith_tol=grouping_solar_zenith_tol,
         )
+        if use_grouping and grouping_scope == "chunk":
+            return _speedy_invert_grouped_block(
+                spectra_targets=spectra_targets,
+                spectra_backgrounds=spectra_backgrounds,
+                obs_solar_angles=obs_solar_angles,
+                spectrum_shade=spectrum_shade,
+                bands=bands,
+                solar_angles=solar_angles,
+                dust_concentrations=dust,
+                grain_sizes=grain,
+                reflectances=reflectances,
+                max_eval=max_eval,
+                x0=x0,
+                algorithm=algorithm,
+                valid_mask=valid_mask,
+                grouping_method=grouping_method,
+                grouping_tolerance=grouping_tolerance,
+                grouping_reflectance_tol=grouping_reflectance_tol,
+                grouping_background_tol=grouping_background_tol,
+                grouping_solar_zenith_tol=grouping_solar_zenith_tol,
+            )
+
         if spectra_targets.ndim == 4:
             n_time = spectra_targets.shape[0]
             results = np.empty((n_time,) + spectra_targets.shape[1:3] + (4,))
             bg_t = spectra_backgrounds.ndim == 4
             sa_t = obs_solar_angles.ndim == 3
+            mask_t = valid_mask is not None and valid_mask.ndim == 3
             for t in range(n_time):
                 results[t] = speedy_invert_array2d(
                     spectra_targets=spectra_targets[t],
                     spectra_backgrounds=spectra_backgrounds[t] if bg_t else spectra_backgrounds,
                     obs_solar_angles=obs_solar_angles[t] if sa_t else obs_solar_angles,
+                    valid_mask=None if valid_mask is None else valid_mask[t] if mask_t else valid_mask,
                     **common,
                 )
             return results
@@ -100,17 +150,20 @@ def _make_invert_chunk(max_eval, x0, algorithm):
             spectra_targets=spectra_targets,
             spectra_backgrounds=spectra_backgrounds,
             obs_solar_angles=obs_solar_angles,
+            valid_mask=valid_mask,
             **common,
         )
     return _invert
 
 
-def _to_dataset(results):
+def _to_dataset(results, attrs=None):
     ds = results.to_dataset(dim='property').rename({
         0: 'fsca', 1: 'fshade', 2: 'dust_concentration', 3: 'grain_size',
     })
-    for name, attrs in _VARIABLE_ATTRS.items():
-        ds[name].attrs = attrs
+    for name, variable_attrs in _VARIABLE_ATTRS.items():
+        ds[name].attrs = variable_attrs
+    if attrs:
+        ds.attrs.update(attrs)
     return ds
 
 
@@ -169,7 +222,11 @@ def encode_results(ds, fill_value=-1, fsca_scale=100, fshade_scale=100,
 def speedy_invert_dask(spectra_targets, spectra_backgrounds, obs_solar_angles,
                        interpolator, spectrum_shade=None, max_eval=100,
                        x0=np.array([0.5, 0.05, 10, 250]), algorithm=2,
-                       client=None, scatter_lut=True):
+                       client=None, scatter_lut=True, valid_mask=None,
+                       use_grouping=False, grouping_scope="scene",
+                       grouping_method="group_mean", grouping_tolerance=0.02,
+                       grouping_reflectance_tol=None, grouping_background_tol=None,
+                       grouping_solar_zenith_tol=None):
     """
     Parallel inversion of snow reflectance spectra using Dask and xarray.
 
@@ -194,8 +251,7 @@ def speedy_invert_dask(spectra_targets, spectra_backgrounds, obs_solar_angles,
     interpolator : spires_inversion.interpolator.LutInterpolator
         Lookup table interpolator object.
     spectrum_shade : numpy.ndarray, optional
-        Currently unused: speedy_invert_array2d hardcodes a zero shade spectrum.
-        Accepted for forward compatibility.
+        1D array representing the ideal shaded spectrum. If None, uses zeros.
     max_eval : int, optional
         Maximum optimization iterations per pixel (default: 100).
     x0 : array-like, optional
@@ -206,6 +262,14 @@ def speedy_invert_dask(spectra_targets, spectra_backgrounds, obs_solar_angles,
         Dask client. If None, uses the default client when one is active.
     scatter_lut : bool, optional
         Broadcast the LUT to all workers (default: True).
+    valid_mask : xarray.DataArray, optional
+        Boolean mask with dimensions matching ``obs_solar_angles`` or
+        broadcastable to each chunk's sample dimensions.
+    use_grouping : bool, optional
+        If True, invert representative grouped spectra and scatter back.
+    grouping_scope : {"scene", "chunk"}, optional
+        ``"scene"`` groups each time slice independently. ``"chunk"`` groups
+        across all non-band dimensions inside each Dask chunk.
 
     Notes
     -----
@@ -230,29 +294,61 @@ def speedy_invert_dask(spectra_targets, spectra_backgrounds, obs_solar_angles,
     dask, Client = _import_dask()
     client = _resolve_client(client, Client)
 
+    if grouping_scope not in {"scene", "chunk"}:
+        raise ValueError("grouping_scope must be one of {'scene', 'chunk'}")
+    if spectrum_shade is None:
+        spectrum_shade = np.zeros(len(interpolator.bands), dtype=np.double)
+    else:
+        spectrum_shade = np.asarray(spectrum_shade, dtype=np.double)
+
     if scatter_lut and client is not None:
         reflectances = _scatter_lut(client, interpolator.reflectances, dask)
     else:
         reflectances = interpolator.reflectances
 
-    invert_chunk = _make_invert_chunk(max_eval, x0, algorithm)
+    invert_chunk = _make_invert_chunk(
+        max_eval=max_eval,
+        x0=x0,
+        algorithm=algorithm,
+        spectrum_shade=spectrum_shade,
+        valid_mask_present=valid_mask is not None,
+        use_grouping=use_grouping,
+        grouping_scope=grouping_scope,
+        grouping_method=grouping_method,
+        grouping_tolerance=grouping_tolerance,
+        grouping_reflectance_tol=grouping_reflectance_tol,
+        grouping_background_tol=grouping_background_tol,
+        grouping_solar_zenith_tol=grouping_solar_zenith_tol,
+    )
 
-    results = xarray.apply_ufunc(
-        invert_chunk,
+    ufunc_args = [
         spectra_targets,
         spectra_backgrounds,
         obs_solar_angles,
+    ]
+    input_core_dims = [
+        ['band'], ['band'], [],
+    ]
+    if valid_mask is not None:
+        ufunc_args.append(valid_mask)
+        input_core_dims.append([])
+    ufunc_args.extend([
         interpolator.bands,
         interpolator.solar_angles,
         interpolator.dust_concentrations,
         interpolator.grain_sizes,
         reflectances,
+    ])
+    input_core_dims.extend([
+        ['bands'], ['sz'], ['dust'], ['grain'],
+        ['bands', 'sz', 'dust', 'grain'],
+    ])
+
+    results = xarray.apply_ufunc(
+        invert_chunk,
+        *ufunc_args,
         dask='parallelized',
-        input_core_dims=[
-            ['band'], ['band'], [],
-            ['bands'], ['sz'], ['dust'], ['grain'],
-            ['bands', 'sz', 'dust', 'grain'],
-        ],
+        input_core_dims=input_core_dims,
         output_core_dims=[['property']],
         output_dtypes=[np.float32],
         dask_gufunc_kwargs={
@@ -262,4 +358,15 @@ def speedy_invert_dask(spectra_targets, spectra_backgrounds, obs_solar_angles,
         vectorize=False,
     )
 
-    return _to_dataset(results)
+    return _to_dataset(
+        results,
+        attrs={
+            'grouping_enabled': bool(use_grouping),
+            'grouping_scope': grouping_scope if use_grouping else 'none',
+            'grouping_method': grouping_method if use_grouping else 'none',
+            'grouping_tolerance': grouping_tolerance,
+            'grouping_reflectance_tol': grouping_reflectance_tol,
+            'grouping_background_tol': grouping_background_tol,
+            'grouping_solar_zenith_tol': grouping_solar_zenith_tol,
+        },
+    )
