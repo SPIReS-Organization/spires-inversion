@@ -156,7 +156,7 @@ def group_spectra_rows(
     obs_solar_angles: Optional[np.ndarray] = None,
     *,
     valid_mask: Optional[np.ndarray] = None,
-    representative_method: RepresentativeMethod = "mean_of_pixels",
+    representative_method: RepresentativeMethod = "group_mean",
     tolerance: Tolerance = 0.02,
     reflectance_tol: Optional[Tolerance] = None,
     background_tol: Optional[Tolerance] = None,
@@ -194,9 +194,9 @@ def group_spectra_rows(
         solar_tol_arr = _normalize_tolerance(solar_zenith_tol, solar_fallback, 1, "solar_zenith_tol")
 
     representative_method = representative_method.lower()
-    if representative_method not in {"first_pixel", "mean_of_pixels"}:
+    if representative_method not in {"first_pixel", "group_mean"}:
         raise ValueError(
-            "representative_method must be one of {'first_pixel', 'mean_of_pixels'}; "
+            "representative_method must be one of {'first_pixel', 'group_mean'}; "
             f"got {representative_method!r}"
         )
 
@@ -268,7 +268,7 @@ def group_spectra_block(
     obs_solar_angles: Optional[np.ndarray] = None,
     *,
     valid_mask: Optional[np.ndarray] = None,
-    representative_method: RepresentativeMethod = "mean_of_pixels",
+    representative_method: RepresentativeMethod = "group_mean",
     tolerance: Tolerance = 0.02,
     reflectance_tol: Optional[Tolerance] = None,
     background_tol: Optional[Tolerance] = None,

@@ -224,7 +224,7 @@ def speedy_invert_dask(spectra_targets, spectra_backgrounds, obs_solar_angles,
                        x0=np.array([0.5, 0.05, 10, 250]), algorithm=2,
                        client=None, scatter_lut=True, valid_mask=None,
                        use_grouping=False, grouping_scope="scene",
-                       grouping_method="mean_of_pixels", grouping_tolerance=0.02,
+                       grouping_method="group_mean", grouping_tolerance=0.02,
                        grouping_reflectance_tol=None, grouping_background_tol=None,
                        grouping_solar_zenith_tol=None):
     """

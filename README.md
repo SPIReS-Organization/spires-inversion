@@ -118,14 +118,14 @@ ds = spires.speedy_invert_dask(
     interpolator=interpolator,
     use_grouping=True,
     grouping_scope="scene",
-    grouping_method="mean_of_pixels",
+    grouping_method="group_mean",
     grouping_tolerance=0.02,
 )
 ```
 
 `grouping_scope="scene"` groups within each scene/time slice. Use
 `grouping_scope="chunk"` to group across all non-band dimensions in each Dask
-chunk, including time. `grouping_method` can be `"mean_of_pixels"` or
+chunk, including time. `grouping_method` can be `"group_mean"` or
 `"first_pixel"`. Non-finite inputs and pixels excluded by `valid_mask` are
 skipped and returned as `NaN`.
 

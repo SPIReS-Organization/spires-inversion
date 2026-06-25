@@ -40,7 +40,7 @@ def test_first_representative_uses_first_member():
     np.testing.assert_allclose(grouped.representative_solar_zenith[0], solar[0])
 
 
-def test_mean_of_pixels_representative_uses_group_mean():
+def test_group_mean_representative_uses_group_mean():
     targets = np.array([[0.201, 0.301], [0.209, 0.309], [0.7, 0.8]], dtype=np.float64)
     backgrounds = np.array([[0.101, 0.111], [0.109, 0.119], [0.4, 0.5]], dtype=np.float64)
     solar = np.array([30.0, 31.0, 40.0], dtype=np.float64)
@@ -49,7 +49,7 @@ def test_mean_of_pixels_representative_uses_group_mean():
         targets,
         backgrounds,
         solar,
-        representative_method="mean_of_pixels",
+        representative_method="group_mean",
         tolerance=0.05,
     )
 

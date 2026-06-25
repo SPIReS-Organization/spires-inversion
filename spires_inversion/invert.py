@@ -239,7 +239,7 @@ def _speedy_invert_grouped_block(
     x0,
     algorithm,
     valid_mask=None,
-    grouping_method="mean_of_pixels",
+    grouping_method="group_mean",
     grouping_tolerance=0.02,
     grouping_reflectance_tol=None,
     grouping_background_tol=None,
@@ -278,7 +278,7 @@ def _speedy_invert_grouped_block(
 
 def speedy_invert_array2d(spectra_targets, spectra_backgrounds, obs_solar_angles, max_eval=100, x0=np.array([0.5, 0.05, 10, 250]), algorithm=2,
                           bands=None, solar_angles=None, dust_concentrations=None, grain_sizes=None, reflectances=None, interpolator=None,
-                          spectrum_shade=None, valid_mask=None, use_grouping=False, grouping_method="mean_of_pixels",
+                          spectrum_shade=None, valid_mask=None, use_grouping=False, grouping_method="group_mean",
                           grouping_tolerance=0.02, grouping_reflectance_tol=None, grouping_background_tol=None,
                           grouping_solar_zenith_tol=None):
     """
@@ -350,7 +350,7 @@ def speedy_invert_array2d(spectra_targets, spectra_backgrounds, obs_solar_angles
     use_grouping : bool, optional
         If True, invert representative grouped spectra and scatter results back.
     grouping_method : str, optional
-        Representative selection method: ``"mean_of_pixels"`` or ``"first_pixel"``.
+        Representative selection method: ``"group_mean"`` or ``"first_pixel"``.
 
     Returns
     -------

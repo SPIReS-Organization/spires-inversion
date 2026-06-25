@@ -186,7 +186,7 @@ ds = spires_inversion.speedy_invert_dask(
     interpolator=interpolator,
     use_grouping=True,
     grouping_scope="scene",
-    grouping_method="mean_of_pixels",
+    grouping_method="group_mean",
     grouping_tolerance=0.02,
 )
 ```
@@ -201,7 +201,7 @@ representative spectrum is chosen*:
   current Dask chunk. For a time cube, pixels from different times may share a
   representative inversion when target spectra, R_0 spectra, and solar zenith
   fall in the same grouping bin.
-- `grouping_method="mean_of_pixels"` inverts the arithmetic mean target,
+- `grouping_method="group_mean"` inverts the arithmetic mean target,
   background, and solar-zenith values for each group.
 - `grouping_method="first_pixel"` inverts the first valid pixel encountered in
   each group.
@@ -237,7 +237,7 @@ ds = spires_inversion.speedy_invert_dask(
     interpolator=interpolator,
     use_grouping=True,
     grouping_scope="chunk",
-    grouping_method="mean_of_pixels",
+    grouping_method="group_mean",
     grouping_reflectance_tol=np.array([0.015, 0.015, 0.02, 0.02]),
     grouping_background_tol=0.03,
     grouping_solar_zenith_tol=1.5,
