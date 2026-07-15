@@ -73,6 +73,17 @@ python -m build --wheel
 - **Scaling in optimization**: Different coordinate scales require problem scaling (see line 344-346)
 - **COBYLA vs SLSQP**: SLSQP doesn't work in C++, using LN_COBYLA instead
 - **Git LFS**: Test data stored in LFS, need `git lfs install`
+- **float32 storage path**: the big arrays (imagery targets/backgrounds + LUT
+  reflectances) may be float32 **or** float64. The C++ kernel is templated on the
+  storage type (`interpolate_idx_impl<T>`, `spectrum_difference*_impl<T>`,
+  `invert_impl<T>`, `invert_array2d_impl<T>`); public `double` symbols and new
+  `*_f32` entry points both delegate to it. Every value is promoted to `double`
+  on read, so math + NLopt stay `double` (identical numerics; float32 halves
+  memory). Python `speedy_invert_array2d` / `speedy_invert_xarray` dispatch on
+  input dtype via `_invert_array2d_dispatch`. Coordinate axes, shade, solar
+  angles, and results are always `double`. **Do not** pass float32 arrays into
+  the `double` SWIG entry points — the typemaps are dtype-strict and won't upcast;
+  use the dispatch helper or the `*_f32` core functions.
 
 ### File Organization
 ```

@@ -50,6 +50,24 @@ namespace std {
 }
 
 
+/* float32-storage variants. numpy.i already ships float typemaps, so these map
+   the big arrays of the *_f32 entry points to borrowed float32 numpy buffers.
+   The kernel promotes each value to double at read time (see spires.cpp). */
+%apply (float* IN_ARRAY4, int DIM1, int DIM2, int DIM3, int DIM4) {
+    (float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes)
+};
+
+%apply(float* IN_ARRAY3, int DIM1, int DIM2, int DIM3){
+    (float* spectra_backgrounds, int n_background_y, int n_background_x, int n_bands_backgrounds),
+    (float* spectra_targets, int n_target_y, int n_target_x, int n_bands_target)
+}
+
+%apply (float* IN_ARRAY2, int DIM1, int DIM2) {
+    (float* spectra_backgrounds, int n_obs_backgrounds, int n_bands_backgrounds),
+    (float* spectra_targets, int n_obs_target, int n_bands_target)
+}
+
+
 %apply (double* IN_ARRAY1, int DIM1) { 
     (double* spectrum_background, int len_background),
     (double* spectrum_target, int len_target),
@@ -135,6 +153,24 @@ namespace std {
 }
 
 %exception invert_array2d {
+    try {
+        SpiresGILRelease _gil;
+        $action
+    } catch (const std::exception& e) {
+        SWIG_exception(SWIG_RuntimeError, e.what());
+    }
+}
+
+%exception invert_array1d_f32 {
+    try {
+        SpiresGILRelease _gil;
+        $action
+    } catch (const std::exception& e) {
+        SWIG_exception(SWIG_RuntimeError, e.what());
+    }
+}
+
+%exception invert_array2d_f32 {
     try {
         SpiresGILRelease _gil;
         $action
