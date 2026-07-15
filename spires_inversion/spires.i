@@ -21,6 +21,13 @@
   };
 %}
 
+/* numpy.i is VENDORED third-party code — a verbatim copy of NumPy's official
+   SWIG helper (numpy/tools/swig/numpy.i, BSD-licensed, NumPy Developers).
+   Do NOT hand-edit it: keep it byte-for-byte upstream so it can be re-synced by
+   dropping in a newer copy. All project-specific SWIG logic belongs in THIS
+   file. It already instantiates float AND double typemaps, so float32 support
+   is a matter of the %apply lines below + the C++ kernel, not numpy.i.
+   Revisiting whether to re-vendor a newer numpy.i is tracked in bd. */
 %include "numpy.i"
 
 %init %{

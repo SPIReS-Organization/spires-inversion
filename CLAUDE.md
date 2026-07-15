@@ -84,6 +84,8 @@ spires_inversion/
   ├── core.py              # Core utilities
   ├── spires.cpp           # C++ optimized code
   ├── spires.h             # C++ header
+  ├── spires.i             # SWIG interface (project-owned; edit for bindings)
+  ├── numpy.i              # VENDORED from numpy/tools/swig — do NOT edit; re-sync from upstream
   ├── spires_wrap.cpp      # SWIG-generated (don't edit!)
   └── cobyla.cpp           # COBYLA implementation
 tests/
