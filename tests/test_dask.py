@@ -19,20 +19,23 @@ expected_per_pixel = np.array([4.089303e-01, 1.552017e-01, 1.387936e+02, 3.64584
 
 
 def _make_inputs(ny=2, nx=3, nt=None, chunks=None):
+    # Imagery crosses the io->inversion boundary as float32 (contract dtype).
     n_bands = spectrum_target.size
+    tgt32 = spectrum_target.astype(np.float32)
+    bg32 = spectrum_background.astype(np.float32)
     if nt is None:
         targets = xr.DataArray(
-            np.broadcast_to(spectrum_target, (ny, nx, n_bands)).copy(),
+            np.broadcast_to(tgt32, (ny, nx, n_bands)).copy(),
             dims=['y', 'x', 'band'])
         angles = xr.DataArray(np.full((ny, nx), solar_angle), dims=['y', 'x'])
     else:
         targets = xr.DataArray(
-            np.broadcast_to(spectrum_target, (nt, ny, nx, n_bands)).copy(),
+            np.broadcast_to(tgt32, (nt, ny, nx, n_bands)).copy(),
             dims=['time', 'y', 'x', 'band'])
         angles = xr.DataArray(np.full((nt, ny, nx), solar_angle), dims=['time', 'y', 'x'])
 
     backgrounds = xr.DataArray(
-        np.broadcast_to(spectrum_background, (ny, nx, n_bands)).copy(),
+        np.broadcast_to(bg32, (ny, nx, n_bands)).copy(),
         dims=['y', 'x', 'band'])
 
     if chunks is not None:

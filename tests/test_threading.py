@@ -25,9 +25,10 @@ expected_per_pixel = np.array(
 
 
 def _make_chunk(ny=8, nx=8):
+    # Imagery crosses the io->inversion boundary as float32 (contract dtype).
     n_bands = spectrum_target.size
-    targets = np.broadcast_to(spectrum_target, (ny, nx, n_bands)).copy()
-    backgrounds = np.broadcast_to(spectrum_background, (ny, nx, n_bands)).copy()
+    targets = np.broadcast_to(spectrum_target.astype(np.float32), (ny, nx, n_bands)).copy()
+    backgrounds = np.broadcast_to(spectrum_background.astype(np.float32), (ny, nx, n_bands)).copy()
     angles = np.full((ny, nx), solar_angle)
     return targets, backgrounds, angles
 

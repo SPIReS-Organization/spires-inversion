@@ -40,19 +40,17 @@ namespace std {
 }
 
 
-%apply (double* IN_ARRAY4, int DIM1, int DIM2, int DIM3, int DIM4) { 
+/* Single-pixel invert()/interpolate_* keep a double LUT. */
+%apply (double* IN_ARRAY4, int DIM1, int DIM2, int DIM3, int DIM4) {
     (double* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes)
 };
 
-%apply(double* IN_ARRAY3, int DIM1, int DIM2, int DIM3){
-    (double* spectra_backgrounds, int n_background_y, int n_background_x, int n_bands_backgrounds),
-    (double* spectra_targets, int n_target_y, int n_target_x, int n_bands_target)
-}
 
-
-/* float32-storage variants. numpy.i already ships float typemaps, so these map
-   the big arrays of the *_f32 entry points to borrowed float32 numpy buffers.
-   The kernel promotes each value to double at read time (see spires.cpp). */
+/* Batch entry points (invert_array1d / invert_array2d) store the big arrays as
+   float32 to halve memory. numpy.i already ships float typemaps, so these map the
+   big arrays to borrowed float32 numpy buffers; the kernel promotes each value to
+   double at read time (see spires.cpp). float32 is a storage-signature property,
+   not a name suffix, so these carry the plain names. */
 %apply (float* IN_ARRAY4, int DIM1, int DIM2, int DIM3, int DIM4) {
     (float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes)
 };
@@ -83,9 +81,9 @@ namespace std {
     (double* x, int len_x)
 }
 
+/* 2D per-pixel solar angles stay double (only the big spectra/LUT arrays are
+   float32). */
 %apply (double* IN_ARRAY2, int DIM1, int DIM2) {
-       (double* spectra_backgrounds, int n_obs_backgrounds, int n_bands_backgrounds),
-       (double* spectra_targets, int n_obs_target, int n_bands_target),
        (double* obs_solar_angles, int n_obs_solar_y, int n_obs_solar_x)
 }
 
@@ -153,24 +151,6 @@ namespace std {
 }
 
 %exception invert_array2d {
-    try {
-        SpiresGILRelease _gil;
-        $action
-    } catch (const std::exception& e) {
-        SWIG_exception(SWIG_RuntimeError, e.what());
-    }
-}
-
-%exception invert_array1d_f32 {
-    try {
-        SpiresGILRelease _gil;
-        $action
-    } catch (const std::exception& e) {
-        SWIG_exception(SWIG_RuntimeError, e.what());
-    }
-}
-
-%exception invert_array2d_f32 {
     try {
         SpiresGILRelease _gil;
         $action

@@ -29,17 +29,18 @@ def lut_dataarray():
 
 def _scene(n_bands):
     """A tiny 2x3 scene of target/background spectra and solar angles, built in
-    CANONICAL (y, x, band) / (y, x) order, float64, with a band coordinate."""
+    CANONICAL (y, x, band) / (y, x) order, float32 (the contract dtype), with a
+    band coordinate."""
     ny, nx = 2, 3
-    rng = np.arange(ny * nx * n_bands, dtype=np.float64).reshape(ny, nx, n_bands)
+    rng = np.arange(ny * nx * n_bands, dtype=np.float32).reshape(ny, nx, n_bands)
     targets = xr.DataArray(
-        0.3 + 0.01 * rng, dims=('y', 'x', 'band'),
+        (0.3 + 0.01 * rng).astype(np.float32), dims=('y', 'x', 'band'),
         coords={'band': np.arange(n_bands)})
     backgrounds = xr.DataArray(
-        0.1 + 0.01 * rng, dims=('y', 'x', 'band'),
+        (0.1 + 0.01 * rng).astype(np.float32), dims=('y', 'x', 'band'),
         coords={'band': np.arange(n_bands)})
     angles = xr.DataArray(
-        np.full((ny, nx), 50.0), dims=('y', 'x'))
+        np.full((ny, nx), 50.0, dtype=np.float32), dims=('y', 'x'))
     return targets, backgrounds, angles
 
 

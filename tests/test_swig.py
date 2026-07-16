@@ -78,8 +78,9 @@ def test_invert():
 def test_invert_array():
     n = 3
     results = np.empty((n, 4), dtype=np.double)
-    spectra_backgrounds = np.tile(spectrum_background, (n, 1))
-    spectra_targets = np.tile(spectrum_target, (n, 1))
+    # Batch kernel stores the big arrays (imagery + LUT) as float32.
+    spectra_backgrounds = np.tile(spectrum_background, (n, 1)).astype(np.float32)
+    spectra_targets = np.tile(spectrum_target, (n, 1)).astype(np.float32)
     obs_solar_angles = np.repeat(solar_angle, n)
 
     spires_inversion.core.invert_array1d(spectra_backgrounds=spectra_backgrounds,
@@ -90,7 +91,7 @@ def test_invert_array():
                                lut_solar_angles=interpolator.solar_angles,
                                lut_dust_concentrations=interpolator.dust_concentrations,
                                lut_grain_sizes=interpolator.grain_sizes,
-                               lut_reflectances=interpolator.reflectances,
+                               lut_reflectances=interpolator.reflectances.astype(np.float32),
                                results=results,
                                max_eval=100,
                                x0=x0,
@@ -120,9 +121,9 @@ def test_invert_array2d():
     rather than pinned optimizer coordinates, which drift across platforms
     (see README "Cross-platform numerical reproducibility")."""
     spectra_targets = np.stack([np.tile(_pixel_a_target, (3, 1)),
-                                np.tile(_pixel_b_target, (3, 1))], axis=0)
+                                np.tile(_pixel_b_target, (3, 1))], axis=0).astype(np.float32)
     spectra_backgrounds = np.stack([np.tile(_pixel_a_background, (3, 1)),
-                                    np.tile(_pixel_b_background, (3, 1))], axis=0)
+                                    np.tile(_pixel_b_background, (3, 1))], axis=0).astype(np.float32)
     obs_solar_angles = np.full((2, 3), solar_angle)
 
     results = spires_inversion.speedy_invert_array2d(spectra_targets=spectra_targets,
@@ -259,10 +260,11 @@ def _real_imagery_setup():
     except (OSError, ValueError):
         pytest.skip("LFS test data not available (run `git lfs pull`)")
 
+    # Imagery crosses the io->inversion boundary as float32 (contract dtype).
     R = np.ascontiguousarray(
-        ds['reflectance'].isel(time=0).transpose('y', 'x', 'band').values.astype(np.float64))
+        ds['reflectance'].isel(time=0).transpose('y', 'x', 'band').values.astype(np.float32))
     R0 = np.ascontiguousarray(
-        ds0['reflectance'].transpose('y', 'x', 'band').values.astype(np.float64))
+        ds0['reflectance'].transpose('y', 'x', 'band').values.astype(np.float32))
     sza = np.full(R.shape[:2],
                   float(np.nanmean(ds['sun_zenith_grid'].isel(time=0).values)))
     sza0 = float(sza[0, 0])
@@ -363,71 +365,72 @@ def test_invert_unknown_algorithm_raises():
 
 
 # ---------------------------------------------------------------------------
-# float32 storage path (bd spires-h4e)
+# float32 storage boundary
 #
-# The io->inversion boundary accepts float32 imagery + LUT to halve memory; the
-# C++ kernel stores them as float32 and promotes each value to double at read
-# time, so the interpolation/cost math and NLopt run in double. These tests pin
-# that the float32 path (a) is reachable via speedy_invert_array2d dtype
-# dispatch, and (b) matches the float64 path — exactly for the hybrid algorithm
-# (6), and to float32-precision for COBYLA (1).
+# The batch io->inversion path is float32-only: imagery must be float32 (the
+# contract dtype; a float64 array raises), and the C++ kernel stores the big
+# arrays as float32 and promotes each value to double at read time, so the
+# interpolation/cost math and NLopt run in double. These tests pin that the
+# float32 path (a) rejects float64 imagery, (b) is deterministic across repeated
+# calls, and (c) produces physically plausible retrievals.
 # ---------------------------------------------------------------------------
 
 def _f32_image_setup():
-    """Two distinct pixels tiled into a (2, 3, 9) image + matching (2, 3) sza."""
+    """Two distinct pixels tiled into a (2, 3, 9) float32 image + (2, 3) sza."""
     tgt = np.stack([np.tile(_pixel_a_target, (3, 1)),
-                    np.tile(_pixel_b_target, (3, 1))], axis=0)
+                    np.tile(_pixel_b_target, (3, 1))], axis=0).astype(np.float32)
     bg = np.stack([np.tile(_pixel_a_background, (3, 1)),
-                   np.tile(_pixel_b_background, (3, 1))], axis=0)
+                   np.tile(_pixel_b_background, (3, 1))], axis=0).astype(np.float32)
     sza = np.full((2, 3), solar_angle)
     return tgt, bg, sza
 
 
-def _interpolator_f32():
+@pytest.mark.parametrize("algorithm", [1, 6])
+def test_speedy_invert_array2d_float32_is_deterministic(algorithm):
+    """The float32 batch path is deterministic: identical inputs give identical
+    outputs across repeated calls (no dtype-dependent branch, no per-pixel state
+    leakage). Also pins that the interpolator's float64 LUT is accepted (cast to
+    float32 for storage inside the boundary)."""
+    tgt, bg, sza = _f32_image_setup()
     interp = spires_inversion.LutInterpolator(
         lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
-    interp.reflectances = interp.reflectances.astype(np.float32)
-    return interp
+
+    r1 = spires_inversion.speedy_invert_array2d(
+        spectra_targets=tgt, spectra_backgrounds=bg,
+        obs_solar_angles=sza, interpolator=interp, algorithm=algorithm, x0=np.array(x0))
+    r2 = spires_inversion.speedy_invert_array2d(
+        spectra_targets=tgt, spectra_backgrounds=bg,
+        obs_solar_angles=sza, interpolator=interp, algorithm=algorithm, x0=np.array(x0))
+
+    assert r1.shape == (2, 3, 4)
+    np.testing.assert_array_equal(r1, r2)
 
 
-@pytest.mark.parametrize("algorithm,atol", [(6, 0.0), (1, 1e-3)])
-def test_speedy_invert_array2d_float32_matches_float64(algorithm, atol):
-    """float32 storage must reproduce the float64 retrieval. Hybrid (6) is
-    bit-identical (atol=0); COBYLA (1) matches to float32-storage precision
-    (fractions ~1e-7, dust/grain ~1e-4) — well under atol=1e-3. A regression
-    that let float32 storage corrupt the compute path (e.g. truncating the
-    optimizer to float) would blow this up by orders of magnitude."""
+def test_speedy_invert_array2d_rejects_float64_imagery():
+    """A float64 imagery array must raise at the boundary rather than being
+    silently down-cast (float64 -> float32 -> double round-trip). This is the
+    determinism guarantee: producers must emit float32 (spires-io does)."""
     tgt, bg, sza = _f32_image_setup()
-    interp64 = spires_inversion.LutInterpolator(
+    interp = spires_inversion.LutInterpolator(
         lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
-
-    r64 = spires_inversion.speedy_invert_array2d(
-        spectra_targets=tgt.astype(np.float64), spectra_backgrounds=bg.astype(np.float64),
-        obs_solar_angles=sza, interpolator=interp64, algorithm=algorithm, x0=np.array(x0))
-    r32 = spires_inversion.speedy_invert_array2d(
-        spectra_targets=tgt.astype(np.float32), spectra_backgrounds=bg.astype(np.float32),
-        obs_solar_angles=sza, interpolator=_interpolator_f32(), algorithm=algorithm, x0=np.array(x0))
-
-    assert r32.shape == (2, 3, 4)
-    # fractions (columns 0,1) are O(1); dust/grain (2,3) span hundreds, so scale
-    # the tolerance for those by their range.
-    np.testing.assert_allclose(r32[..., :2], r64[..., :2], atol=max(atol, 1e-9))
-    np.testing.assert_allclose(r32[..., 2:], r64[..., 2:], atol=max(atol * 1000, 1e-6), rtol=0)
+    with pytest.raises(TypeError, match="float32"):
+        spires_inversion.speedy_invert_array2d(
+            spectra_targets=tgt.astype(np.float64), spectra_backgrounds=bg,
+            obs_solar_angles=sza, interpolator=interp, algorithm=6, x0=np.array(x0))
 
 
-def test_float32_and_float64_give_physical_results():
-    """Both paths produce physically plausible retrievals (fsca/fshade in
+def test_float32_gives_physical_results():
+    """The float32 path produces physically plausible retrievals (fsca/fshade in
     [0,1]; dust/grain within LUT range)."""
     tgt, bg, sza = _f32_image_setup()
-    for dtype, interp in ((np.float64, spires_inversion.LutInterpolator(
-                               lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')),
-                          (np.float32, _interpolator_f32())):
-        res = spires_inversion.speedy_invert_array2d(
-            spectra_targets=tgt.astype(dtype), spectra_backgrounds=bg.astype(dtype),
-            obs_solar_angles=sza, interpolator=interp, algorithm=6, x0=np.array(x0))
-        assert np.all((res[..., 0] >= 0) & (res[..., 0] <= 1))
-        assert np.all((res[..., 1] >= 0) & (res[..., 1] <= 1))
-        assert np.all((res[..., 2] >= interp.dust_concentrations.min()) &
-                      (res[..., 2] <= interp.dust_concentrations.max()))
-        assert np.all((res[..., 3] >= interp.grain_sizes.min()) &
-                      (res[..., 3] <= interp.grain_sizes.max()))
+    interp = spires_inversion.LutInterpolator(
+        lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
+    res = spires_inversion.speedy_invert_array2d(
+        spectra_targets=tgt, spectra_backgrounds=bg,
+        obs_solar_angles=sza, interpolator=interp, algorithm=6, x0=np.array(x0))
+    assert np.all((res[..., 0] >= 0) & (res[..., 0] <= 1))
+    assert np.all((res[..., 1] >= 0) & (res[..., 1] <= 1))
+    assert np.all((res[..., 2] >= interp.dust_concentrations.min()) &
+                  (res[..., 2] <= interp.dust_concentrations.max()))
+    assert np.all((res[..., 3] >= interp.grain_sizes.min()) &
+                  (res[..., 3] <= interp.grain_sizes.max()))

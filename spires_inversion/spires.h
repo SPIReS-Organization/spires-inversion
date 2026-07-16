@@ -115,42 +115,13 @@ std::vector<double>  invert(double* spectrum_background, int len_background,
 
 
 
-void invert_array1d(double* spectra_backgrounds, int n_obs_backgrounds, int n_bands_backgrounds,
-                    double* spectra_targets, int n_obs_target, int n_bands_target,
-                    double* spectrum_shade, int len_shade,
-                    double* obs_solar_angles, int n_obs_solar_angles,
-                    double* lut_bands, int len_lut_bands,
-                    double* lut_solar_angles, int len_lut_solar_angles,
-                    double* lut_dust_concentrations, int len_lut_dust_concentrations,
-                    double* lut_grain_sizes, int len_lut_grain_sizes,
-                    double* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
-                    double* results, int n_obs, int n_results,
-                    int max_eval,
-                    std::vector<double> x0,
-                    int algorithm);
-
-
-void invert_array2d(double* spectra_backgrounds, int n_background_y, int n_background_x, int n_bands_backgrounds,
-                    double* spectra_targets, int n_target_y, int n_target_x, int n_bands_target,
-                    double* spectrum_shade, int len_shade,
-                    double* obs_solar_angles, int n_obs_solar_y, int n_obs_solar_x,
-                    double* lut_bands, int len_lut_bands,
-                    double* lut_solar_angles, int len_lut_solar_angles,
-                    double* lut_dust_concentrations, int len_lut_dust_concentrations,
-                    double* lut_grain_sizes, int len_lut_grain_sizes,
-                    double* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
-                    double* results, int n_y, int n_x, int n_results,
-                    int max_eval,
-                    std::vector<double> x0,
-                    int algorithm);
-
-
-// float32-storage variants of the batch entry points. The big arrays (imagery
-// targets/backgrounds and the LUT) are stored as float32 to halve memory; every
-// value is promoted to double at read time inside the kernel, so the
-// interpolation/cost math and NLopt run in full double precision — numerically
-// identical to the double path. Coordinate axes, shade, and results stay double.
-void invert_array1d_f32(float* spectra_backgrounds, int n_obs_backgrounds, int n_bands_backgrounds,
+// Batch inversion entry points. The big arrays (imagery targets/backgrounds and
+// the LUT) are stored as float32 to halve memory; every value is promoted to
+// double at read time inside the kernel, so the interpolation/cost math and NLopt
+// run in full double precision. float32 is a property of the storage signature,
+// not a name suffix. Coordinate axes, shade, solar angles, and results stay
+// double. The single-pixel `invert()` path (above) remains double.
+void invert_array1d(float* spectra_backgrounds, int n_obs_backgrounds, int n_bands_backgrounds,
                     float* spectra_targets, int n_obs_target, int n_bands_target,
                     double* spectrum_shade, int len_shade,
                     double* obs_solar_angles, int n_obs_solar_angles,
@@ -165,7 +136,7 @@ void invert_array1d_f32(float* spectra_backgrounds, int n_obs_backgrounds, int n
                     int algorithm);
 
 
-void invert_array2d_f32(float* spectra_backgrounds, int n_background_y, int n_background_x, int n_bands_backgrounds,
+void invert_array2d(float* spectra_backgrounds, int n_background_y, int n_background_x, int n_bands_backgrounds,
                     float* spectra_targets, int n_target_y, int n_target_x, int n_bands_target,
                     double* spectrum_shade, int len_shade,
                     double* obs_solar_angles, int n_obs_solar_y, int n_obs_solar_x,

@@ -843,8 +843,8 @@ std::vector<double> invert(double* spectrum_background, int len_background,
 }
 
 
-// Templated 1D-batch inversion. `invert_array1d` (double) and
-// `invert_array1d_f32` (float storage) delegate here.
+// Templated 1D-batch inversion. The public `invert_array1d` (float storage)
+// delegates here with T=float; `invert_impl<double>` still serves single pixels.
 template<typename T>
 void invert_array1d_impl(const T* spectra_backgrounds, int n_obs_backgrounds, int n_bands_backgrounds,
                     const T* spectra_targets, int n_obs_target, int n_bands_target,
@@ -878,33 +878,7 @@ void invert_array1d_impl(const T* spectra_backgrounds, int n_obs_backgrounds, in
 }
 
 
-void invert_array1d(double* spectra_backgrounds, int n_obs_backgrounds, int n_bands_backgrounds,
-                    double* spectra_targets, int n_obs_target, int n_bands_target,
-                    double* spectrum_shade, int len_shade,
-                    double* obs_solar_angles, int n_obs_solar_angles,
-                    double* lut_bands, int len_lut_bands,
-                    double* lut_solar_angles, int len_lut_solar_angles,
-                    double* lut_dust_concentrations, int len_lut_dust_concentrations,
-                    double* lut_grain_sizes, int len_lut_grain_sizes,
-                    double* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
-                    double* results, int n_obs, int n_results,
-                    int max_eval,
-                    std::vector<double> x0,
-                    int algorithm) {
-    invert_array1d_impl<double>(spectra_backgrounds, n_obs_backgrounds, n_bands_backgrounds,
-                    spectra_targets, n_obs_target, n_bands_target,
-                    spectrum_shade, len_shade,
-                    obs_solar_angles, n_obs_solar_angles,
-                    lut_bands, len_lut_bands,
-                    lut_solar_angles, len_lut_solar_angles,
-                    lut_dust_concentrations, len_lut_dust_concentrations,
-                    lut_grain_sizes, len_lut_grain_sizes,
-                    lut_reflectances, n_lut_bands, n_lut_solar_angles, n_lut_dust_concentrations, n_lut_grain_sizes,
-                    results, n_obs, n_results, max_eval, x0, algorithm);
-}
-
-
-void invert_array1d_f32(float* spectra_backgrounds, int n_obs_backgrounds, int n_bands_backgrounds,
+void invert_array1d(float* spectra_backgrounds, int n_obs_backgrounds, int n_bands_backgrounds,
                     float* spectra_targets, int n_obs_target, int n_bands_target,
                     double* spectrum_shade, int len_shade,
                     double* obs_solar_angles, int n_obs_solar_angles,
@@ -930,8 +904,8 @@ void invert_array1d_f32(float* spectra_backgrounds, int n_obs_backgrounds, int n
 }
 
 
-// Templated 2D-batch inversion — the io->inversion workhorse. `invert_array2d`
-// (double) and `invert_array2d_f32` (float storage) delegate here.
+// Templated 2D-batch inversion — the io->inversion workhorse. The public
+// `invert_array2d` (float storage) delegates here with T=float.
 template<typename T>
 void invert_array2d_impl(const T* spectra_backgrounds, int n_background_y, int n_background_x, int n_bands_backgrounds,
                     const T* spectra_targets, int n_target_y, int n_target_x, int n_bands_target,
@@ -968,33 +942,7 @@ void invert_array2d_impl(const T* spectra_backgrounds, int n_background_y, int n
 }
 
 
-void invert_array2d(double* spectra_backgrounds, int n_background_y, int n_background_x, int n_bands_backgrounds,
-                    double* spectra_targets, int n_target_y, int n_target_x, int n_bands_target,
-                    double* spectrum_shade, int len_shade,
-                    double* obs_solar_angles, int n_obs_solar_y, int n_obs_solar_x,
-                    double* lut_bands, int len_lut_bands,
-                    double* lut_solar_angles, int len_lut_solar_angles,
-                    double* lut_dust_concentrations, int len_lut_dust_concentrations,
-                    double* lut_grain_sizes, int len_lut_grain_sizes,
-                    double* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
-                    double* results, int n_y, int n_x, int n_results,
-                    int max_eval,
-                    std::vector<double> x0,
-                    int algorithm) {
-    invert_array2d_impl<double>(spectra_backgrounds, n_background_y, n_background_x, n_bands_backgrounds,
-                    spectra_targets, n_target_y, n_target_x, n_bands_target,
-                    spectrum_shade, len_shade,
-                    obs_solar_angles, n_obs_solar_y, n_obs_solar_x,
-                    lut_bands, len_lut_bands,
-                    lut_solar_angles, len_lut_solar_angles,
-                    lut_dust_concentrations, len_lut_dust_concentrations,
-                    lut_grain_sizes, len_lut_grain_sizes,
-                    lut_reflectances, n_lut_bands, n_lut_solar_angles, n_lut_dust_concentrations, n_lut_grain_sizes,
-                    results, n_y, n_x, n_results, max_eval, x0, algorithm);
-}
-
-
-void invert_array2d_f32(float* spectra_backgrounds, int n_background_y, int n_background_x, int n_bands_backgrounds,
+void invert_array2d(float* spectra_backgrounds, int n_background_y, int n_background_x, int n_bands_backgrounds,
                     float* spectra_targets, int n_target_y, int n_target_x, int n_bands_target,
                     double* spectrum_shade, int len_shade,
                     double* obs_solar_angles, int n_obs_solar_y, int n_obs_solar_x,
