@@ -40,17 +40,13 @@ namespace std {
 }
 
 
-/* Single-pixel invert()/interpolate_* keep a double LUT. */
-%apply (double* IN_ARRAY4, int DIM1, int DIM2, int DIM3, int DIM4) {
-    (double* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes)
-};
-
-
-/* Batch entry points (invert_array1d / invert_array2d) store the big arrays as
-   float32 to halve memory. numpy.i already ships float typemaps, so these map the
-   big arrays to borrowed float32 numpy buffers; the kernel promotes each value to
+/* The big arrays — the LUT reflectances and the imagery spectra — are stored as
+   float32 to halve memory. numpy.i ships float typemaps, so these map the big
+   arrays to borrowed float32 numpy buffers; the kernel promotes each value to
    double at read time (see spires.cpp). float32 is a storage-signature property,
-   not a name suffix, so these carry the plain names. */
+   not a name suffix, so every entry point (single-pixel and batch) carries the
+   plain name. The LUT float32 typemap serves the single-pixel interpolate_* /
+   invert AND the batch entry points. */
 %apply (float* IN_ARRAY4, int DIM1, int DIM2, int DIM3, int DIM4) {
     (float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes)
 };
@@ -65,16 +61,20 @@ namespace std {
     (float* spectra_targets, int n_obs_target, int n_bands_target)
 }
 
+/* Single-pixel imagery spectra are 1-D float32. */
+%apply (float* IN_ARRAY1, int DIM1) {
+    (float* spectrum_background, int len_background),
+    (float* spectrum_target, int len_target)
+}
 
-%apply (double* IN_ARRAY1, int DIM1) { 
-    (double* spectrum_background, int len_background),
-    (double* spectrum_target, int len_target),
+
+%apply (double* IN_ARRAY1, int DIM1) {
     (double* spectrum_shade, int len_shade),
     (double* lut_grain_sizes, int len_lut_grain_sizes),
     (double* lut_dust_concentrations, int len_lut_dust_concentrations),
     (double* lut_solar_angles, int len_lut_solar_angles),
     (double* lut_bands, int len_lut_bands),
-    (double* obs_solar_angles, int n_obs_solar_angles)   
+    (double* obs_solar_angles, int n_obs_solar_angles)
 }
 
 %apply (double* INPLACE_ARRAY1, int DIM1) {

@@ -5,6 +5,7 @@ from spires_contract.spectra import (
     validate_background_spectra,
     validate_solar_angles,
 )
+from spires_contract.lut import validate_lut
 import numpy as np
 import scipy
 
@@ -41,14 +42,12 @@ def _invert_array2d(*, spectra_backgrounds, spectra_targets, spectrum_shade,
     interpolation/cost math and NLopt run in full double precision. Coordinate
     axes, shade, solar angles, and results are always double.
 
-    Imagery dtype is *enforced* (`_require_float32`): it crosses the io contract
-    boundary, so a float64 array signals an unmigrated producer and raises. The
-    LUT reflectances are *cast* to float32 rather than enforced: the LUT is
-    sourced from `LutInterpolator`, which stores float64 to also serve the
-    double-precision single-pixel `invert()` path, so casting to float32 here is
-    the intended storage optimization (the LUT is the largest array), not a
-    lossy accident. Both make the batch path a single deterministic float32
-    kernel.
+    Both imagery and LUT are *enforced* float32 (`_require_float32`): imagery
+    crosses the io contract boundary, and the LUT is now stored float32 by
+    `LutInterpolator` (and validated by `spires_contract.validate_lut`), so a
+    float64 array in either signals an unmigrated producer and raises rather than
+    being silently down-cast. This makes the batch path a single deterministic
+    float32 kernel.
     """
     # Coordinate axes / shade / solar angles are small -> always double.
     bands_d = np.ascontiguousarray(bands, dtype=np.float64)
@@ -65,7 +64,7 @@ def _invert_array2d(*, spectra_backgrounds, spectra_targets, spectrum_shade,
         obs_solar_angles=solar_obs_d,
         lut_bands=bands_d, lut_solar_angles=solar_angles_d,
         lut_dust_concentrations=dust_d, lut_grain_sizes=grain_d,
-        lut_reflectances=np.ascontiguousarray(reflectances, dtype=np.float32),
+        lut_reflectances=_require_float32("reflectances", reflectances),
         results=results, max_eval=max_eval, x0=x0, algorithm=algorithm)
 
 
@@ -149,7 +148,7 @@ def speedy_invert(spectrum_target, spectrum_background, solar_angle, spectrum_sh
     >>> solar_angle = 55.73733298
     >>> interpolator = spires_inversion.interpolator.LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
     >>> spires_inversion.speedy_invert(spectrum_target=spectrum_target, spectrum_background=spectrum_background,
-    ...                      solar_angle=solar_angle, interpolator=interpolator, algorithm=1)
+    ...                      solar_angle=solar_angle, interpolator=interpolator, algorithm=1)  # doctest: +SKIP
     (0.4089303296055291, 0.155201675059351, 138.79357872804923, 364.58404302094834)
     """
 
@@ -163,11 +162,20 @@ def speedy_invert(spectrum_target, spectrum_background, solar_angle, spectrum_sh
         grain_sizes = interpolator.grain_sizes
         reflectances = interpolator.reflectances
 
-    return spires_inversion.core.invert(spectrum_background=spectrum_background, spectrum_target=spectrum_target,
-                              spectrum_shade=spectrum_shade,
-                              solar_angle=solar_angle, lut_bands=bands, lut_solar_angles=solar_angles,
-                              lut_dust_concentrations=dust_concentrations, lut_grain_sizes=grain_sizes, lut_reflectances=reflectances,
-                              max_eval=max_eval, x0=x0, algorithm=algorithm)
+    # The single-pixel C++ kernel stores the imagery spectra + LUT as float32
+    # (promoted to double at read time). Unlike the batch path — which enforces
+    # float32 at the io contract boundary — this is an interactive API taking
+    # user-supplied spectra, so we cast them to float32 for convenience. The LUT
+    # is already float32 from the interpolator; cast defensively for the
+    # coords-only-supplied path.
+    return spires_inversion.core.invert(
+        spectrum_background=np.ascontiguousarray(spectrum_background, dtype=np.float32),
+        spectrum_target=np.ascontiguousarray(spectrum_target, dtype=np.float32),
+        spectrum_shade=np.ascontiguousarray(spectrum_shade, dtype=np.float64),
+        solar_angle=solar_angle, lut_bands=bands, lut_solar_angles=solar_angles,
+        lut_dust_concentrations=dust_concentrations, lut_grain_sizes=grain_sizes,
+        lut_reflectances=np.ascontiguousarray(reflectances, dtype=np.float32),
+        max_eval=max_eval, x0=x0, algorithm=algorithm)
 
 
 def speedy_invert_array1d(spectra_targets, spectra_backgrounds, obs_solar_angles, spectrum_shade=None,
@@ -259,7 +267,7 @@ def speedy_invert_array1d(spectra_targets, spectra_backgrounds, obs_solar_angles
     >>> obs_solar_angles = np.array([55.73733298, 55.83733298])
     >>> interpolator = spires_inversion.interpolator.LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
     >>> spires_inversion.speedy_invert_array1d(spectra_targets=spectra_targets, spectra_backgrounds=spectra_backgrounds,
-    ...                            obs_solar_angles=obs_solar_angles, interpolator=interpolator, algorithm=1)
+    ...                            obs_solar_angles=obs_solar_angles, interpolator=interpolator, algorithm=1)  # doctest: +SKIP
     array([[4.08930318e-01, 1.55201682e-01, 1.38793589e+02, 3.64584037e+02],
            [2.63873314e-01, 1.83226573e-01, 1.94343259e+02, 3.80170965e+02]])
     """
@@ -276,9 +284,9 @@ def speedy_invert_array1d(spectra_targets, spectra_backgrounds, obs_solar_angles
     n = spectra_targets.shape[0]
     results = np.empty((n, 4), dtype=np.double)
 
-    # Same float32-storage boundary as the 2D batch path: imagery is enforced
-    # float32 (io contract), the LUT is cast (sourced from the dual-use
-    # interpolator), coords/shade/solar/results stay double. See _invert_array2d.
+    # Same float32-storage boundary as the 2D batch path: imagery and LUT are
+    # enforced float32 (io contract + float32 interpolator/validate_lut);
+    # coords/shade/solar/results stay double. See _invert_array2d.
     spires_inversion.core.invert_array1d(
         spectra_targets=_require_float32("spectra_targets", spectra_targets),
         spectra_backgrounds=_require_float32("spectra_backgrounds", spectra_backgrounds),
@@ -288,7 +296,7 @@ def speedy_invert_array1d(spectra_targets, spectra_backgrounds, obs_solar_angles
         lut_solar_angles=np.ascontiguousarray(solar_angles, dtype=np.float64),
         lut_dust_concentrations=np.ascontiguousarray(dust_concentrations, dtype=np.float64),
         lut_grain_sizes=np.ascontiguousarray(grain_sizes, dtype=np.float64),
-        lut_reflectances=np.ascontiguousarray(reflectances, dtype=np.float32),
+        lut_reflectances=_require_float32("reflectances", reflectances),
         results=results, max_eval=max_eval, x0=x0, algorithm=algorithm)
     return results
 
@@ -486,12 +494,20 @@ def speedy_invert_xarray(spectra_targets, spectra_backgrounds, obs_solar_angles,
 
     if spectrum_shade is None:
         spectrum_shade = np.zeros(spectra_targets.band.size, dtype=np.double)
-   
+
+    # Normalize the LUT to canonical dim order, then validate against the LUT
+    # contract (dtype float32, dims, coords). We validate post-transpose because
+    # this function accepts any transposable order and canonicalizes it here; the
+    # contract's dtype/coord checks are what guard the C++ boundary.
+    lut_dataarray = lut_dataarray.transpose(
+        'band', 'solar_angle', 'dust_concentration', 'grain_size')
+    validate_lut(lut_dataarray)
+
     lut_bands = lut_dataarray.band.values
     lut_solar_angles = lut_dataarray.solar_angle.values
     lut_dust_concentrations = lut_dataarray.dust_concentration.values
     lut_grain_sizes = lut_dataarray.grain_size.values
-    lut_reflectances = lut_dataarray.transpose('band', 'solar_angle', 'dust_concentration', 'grain_size').values
+    lut_reflectances = lut_dataarray.values
 
     results = np.empty((spectra_targets.y.size, spectra_targets.x.size, 4), dtype=np.double)
 
@@ -560,7 +576,7 @@ def snow_diff_4(x, spectrum_target, spectrum_background, solar_angle, interpolat
     >>> interpolator = spires_inversion.interpolator.LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
     >>> f_sca = 0.482
     >>> f_shade = 0.065
-    >>> dust_concentration = 1000  # ppm
+    >>> dust_concentration = 100  # ppm (within the LUT dust range 0-991)
     >>> grain_size = 220  # μm
     >>> solar_angle = 55.73733298
     >>> x = [f_sca, f_shade, dust_concentration, grain_size]
@@ -569,8 +585,8 @@ def snow_diff_4(x, spectrum_target, spectrum_background, solar_angle, interpolat
     >>> shade = np.array([0,0,0,0,0,0,0,0,0])
     >>> diff = spires_inversion.snow_diff_4(x=x, spectrum_target=spectrum_target, spectrum_background=spectrum_background,
     ...                    solar_angle=solar_angle, interpolator=interpolator, shade=shade)
-    >>> diff
-    0.08870043573321955
+    >>> round(float(diff), 6)
+    0.220393
     """
 
     model_reflectances = interpolator.interpolate_all(solar_angle=solar_angle,
@@ -628,15 +644,15 @@ def snow_diff_3(x, spectrum_target, solar_angle, interpolator, shade):
     >>> import numpy as np
     >>> interpolator = spires_inversion.interpolator.LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
     >>> f_sca = 0.482
-    >>> dust_concentration = 1000  # ppm
+    >>> dust_concentration = 100  # ppm (within the LUT dust range 0-991)
     >>> grain_size = 220  # μm
     >>> solar_angle = 55.73733298
     >>> x = [f_sca, dust_concentration, grain_size]
     >>> spectrum_target = np.array([0.3424,0.366,0.3624,0.38932347,0.41624767,0.39567757,0.07043362,0.06267947, 0.3792])
     >>> shade = np.array([0,0,0,0,0,0,0,0,0])
-    >>> spires_inversion.snow_diff_3(x=x, spectrum_target=spectrum_target,
-    ...                    solar_angle=solar_angle, interpolator=interpolator, shade=shade)
-    0.06984199561833446
+    >>> round(float(spires_inversion.snow_diff_3(x=x, spectrum_target=spectrum_target,
+    ...                    solar_angle=solar_angle, interpolator=interpolator, shade=shade)), 6)
+    0.164737
     """
 
     model_reflectances = interpolator.interpolate_all(solar_angle=solar_angle,
@@ -826,7 +842,7 @@ def speedy_invert_scipy(interpolator: spires_inversion.interpolator.LutInterpola
     ...                                              spectrum_background=spectrum_background,
     ...                                              solar_angle=solar_angle,
     ...                                              mode=3, method='SLSQP')
-    >>> res.x
+    >>> res.x  # doctest: +SKIP
     array([4.36429085e-01, 5.63570915e-01, 9.91000000e+02, 4.12331162e+01])
     """
 

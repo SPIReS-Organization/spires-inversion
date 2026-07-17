@@ -75,16 +75,18 @@ double interpolate_idx_impl(const T* lut_reflectances, int n_lut_bands, int n_lu
 }
 
 
-// Public double-storage entry (SWIG-exposed; unchanged signature). Delegates to
-// the templated implementation with T=double.
-double interpolate_idx(double* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
+// Public float32-storage entry (SWIG-exposed). The LUT is stored as float32;
+// every value is promoted to double at read time inside the templated impl, so
+// the interpolation arithmetic is done in full double precision. float32 is a
+// property of the storage signature, not a name suffix.
+double interpolate_idx(float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
                        int band_idx, double solar_angle_idx, double dust_concentration_idx, double grain_size_idx) {
-    return interpolate_idx_impl<double>(lut_reflectances, n_lut_bands, n_lut_solar_angles, n_lut_dust_concentrations, n_lut_grain_sizes,
+    return interpolate_idx_impl<float>(lut_reflectances, n_lut_bands, n_lut_solar_angles, n_lut_dust_concentrations, n_lut_grain_sizes,
                                         band_idx, solar_angle_idx, dust_concentration_idx, grain_size_idx);
 }
 
 
-std::vector<double> interpolate_all_idx(double* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
+std::vector<double> interpolate_all_idx(float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
                                         double solar_angle_idx, double dust_concentration_idx, double grain_size_idx) {
     std::vector<double> spectrum(n_lut_bands);
     for (int band_idx = 0; band_idx < n_lut_bands; band_idx++) {
@@ -97,7 +99,7 @@ std::vector<double> interpolate_all_idx(double* lut_reflectances, int n_lut_band
 
 // In-place variant: writes into a caller-supplied buffer to avoid the heap
 // allocation in the optimizer's hot path. Caller guarantees |out| >= n_lut_bands.
-static inline void interpolate_all_idx_into(double* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
+static inline void interpolate_all_idx_into(float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
                                             double solar_angle_idx, double dust_concentration_idx, double grain_size_idx,
                                             double* out) {
     for (int band_idx = 0; band_idx < n_lut_bands; band_idx++) {
@@ -142,7 +144,7 @@ double get_idx(double value, double* coordinates, int len_coordinates) {
 }
 
 
-double interpolate(double* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
+double interpolate(float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
                    double* lut_bands, int len_lut_bands,
                    double* lut_solar_angles, int len_lut_solar_angles,
                    double* lut_dust_concentrations, int len_lut_dust_concentrations,
@@ -160,7 +162,7 @@ double interpolate(double* lut_reflectances, int n_lut_bands, int n_lut_solar_an
 }
 
 
-std::vector<double> interpolate_all(double* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
+std::vector<double> interpolate_all(float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
                                     double* lut_bands, int len_lut_bands,
                                     double* lut_solar_angles, int len_lut_solar_angles,
                                     double* lut_dust_concentrations, int len_lut_dust_concentrations,
@@ -176,7 +178,7 @@ std::vector<double> interpolate_all(double* lut_reflectances, int n_lut_bands, i
 }
 
 
-double* interpolate_all_array(double* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
+double* interpolate_all_array(float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
                               double* lut_bands, int len_lut_bands,
                               double* lut_solar_angles, int len_lut_solar_angles,
                               double* lut_dust_concentrations, int len_lut_dust_concentrations,
@@ -249,16 +251,16 @@ double spectrum_difference_impl(const std::vector<double>& x,
 
 
 double spectrum_difference(const std::vector<double>& x,
-                           double* spectrum_background, int len_background,
-                           double* spectrum_target, int len_target,
+                           float* spectrum_background, int len_background,
+                           float* spectrum_target, int len_target,
                            double* spectrum_shade, int len_shade,
                            double solar_angle,
                            double* lut_bands, int len_lut_bands,
                            double* lut_solar_angles, int len_lut_solar_angles,
                            double* lut_dust_concentrations, int len_lut_dust_concentrations,
                            double* lut_grain_sizes, int len_lut_grain_sizes,
-                           double* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes) {
-    return spectrum_difference_impl<double>(x,
+                           float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes) {
+    return spectrum_difference_impl<float>(x,
                                             spectrum_background, len_background,
                                             spectrum_target, len_target,
                                             spectrum_shade, len_shade,
@@ -404,16 +406,16 @@ double spectrum_difference_hybrid_impl(const std::vector<double>& y,
 
 
 double spectrum_difference_hybrid(const std::vector<double>& y,
-                                  double* spectrum_background, int len_background,
-                                  double* spectrum_target, int len_target,
+                                  float* spectrum_background, int len_background,
+                                  float* spectrum_target, int len_target,
                                   double* spectrum_shade, int len_shade,
                                   double solar_angle,
                                   double* lut_bands, int len_lut_bands,
                                   double* lut_solar_angles, int len_lut_solar_angles,
                                   double* lut_dust_concentrations, int len_lut_dust_concentrations,
                                   double* lut_grain_sizes, int len_lut_grain_sizes,
-                                  double* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes) {
-    return spectrum_difference_hybrid_impl<double>(y,
+                                  float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes) {
+    return spectrum_difference_hybrid_impl<float>(y,
                                                    spectrum_background, len_background,
                                                    spectrum_target, len_target,
                                                    spectrum_shade, len_shade,
@@ -496,16 +498,16 @@ double spectrum_difference_softmax_impl(const std::vector<double>& z,
 
 
 double spectrum_difference_softmax(const std::vector<double>& z,
-                                   double* spectrum_background, int len_background,
-                                   double* spectrum_target, int len_target,
+                                   float* spectrum_background, int len_background,
+                                   float* spectrum_target, int len_target,
                                    double* spectrum_shade, int len_shade,
                                    double solar_angle,
                                    double* lut_bands, int len_lut_bands,
                                    double* lut_solar_angles, int len_lut_solar_angles,
                                    double* lut_dust_concentrations, int len_lut_dust_concentrations,
                                    double* lut_grain_sizes, int len_lut_grain_sizes,
-                                   double* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes) {
-    return spectrum_difference_softmax_impl<double>(z,
+                                   float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes) {
+    return spectrum_difference_softmax_impl<float>(z,
                                                     spectrum_background, len_background,
                                                     spectrum_target, len_target,
                                                     spectrum_shade, len_shade,
@@ -536,15 +538,15 @@ double index_to_value(double value, double* coords, int len_coords) {
 
 
 double spectrum_difference_scaled(const std::vector<double>& x,
-                                  double* spectrum_background, int len_background,
-                                  double* spectrum_target, int len_target,
+                                  float* spectrum_background, int len_background,
+                                  float* spectrum_target, int len_target,
                                   double* spectrum_shade, int len_shade,
                                   double solar_angle,
                                   double* lut_bands, int len_lut_bands,
                                   double* lut_solar_angles, int len_lut_solar_angles,
                                   double* lut_dust_concentrations, int len_lut_dust_concentrations,
                                   double* lut_grain_sizes, int len_lut_grain_sizes,
-                                  double* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes) {
+                                  float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes) {
 
     double dust_scaled = index_to_value(x[2], lut_dust_concentrations, len_lut_dust_concentrations);
     double grain_scaled = index_to_value(x[3], lut_grain_sizes, len_lut_grain_sizes);
@@ -817,20 +819,21 @@ std::vector<double> invert_impl(const T* spectrum_background, int len_background
 }
 
 
-// Public double-storage entry (SWIG-exposed; unchanged signature).
-std::vector<double> invert(double* spectrum_background, int len_background,
-                           double* spectrum_target, int len_target,
+// Public float32-storage entry (SWIG-exposed). Imagery spectra + LUT are stored
+// as float32 and promoted to double at read time; the optimizer runs in double.
+std::vector<double> invert(float* spectrum_background, int len_background,
+                           float* spectrum_target, int len_target,
                            double* spectrum_shade, int len_shade,
                            double solar_angle,
                            double* lut_bands, int len_lut_bands,
                            double* lut_solar_angles, int len_lut_solar_angles,
                            double* lut_dust_concentrations, int len_lut_dust_concentrations,
                            double* lut_grain_sizes, int len_lut_grain_sizes,
-                           double* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
+                           float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
                            int max_eval,
                            std::vector<double> x0,
                            int algorithm) {
-    return invert_impl<double>(spectrum_background, len_background,
+    return invert_impl<float>(spectrum_background, len_background,
                                spectrum_target, len_target,
                                spectrum_shade, len_shade,
                                solar_angle,

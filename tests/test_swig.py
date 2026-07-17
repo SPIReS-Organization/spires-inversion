@@ -7,10 +7,12 @@ import pytest
 
 interpolator = spires_inversion.LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat', )
 
-spectrum_target = np.array([0.3424, 0.366, 0.3624, 0.38932347, 0.41624767, 0.39567757, 0.07043362, 0.06267947, 0.3792])
+# Imagery spectra cross the float32 boundary; shade stays double (its C++ typemap
+# is double, like the LUT coordinate axes).
+spectrum_target = np.array([0.3424, 0.366, 0.3624, 0.38932347, 0.41624767, 0.39567757, 0.07043362, 0.06267947, 0.3792], dtype=np.float32)
 spectrum_background = np.array(
-    [0.0182, 0.0265, 0.0283, 0.05606749, 0.09543234, 0.12036866, 0.12491679, 0.07888655, 0.1406])
-spectrum_shade = np.zeros_like(spectrum_target)
+    [0.0182, 0.0265, 0.0283, 0.05606749, 0.09543234, 0.12036866, 0.12491679, 0.07888655, 0.1406], dtype=np.float32)
+spectrum_shade = np.zeros_like(spectrum_target, dtype=np.float64)
 solar_angle = 55.73733298
 
 dust_concentration = 491
@@ -113,15 +115,16 @@ def test_invert_array():
     assert residual < 0.05, f"residual {residual} too large"
 
 
-# Two distinct pixels in different snow regimes (used by invert_array2d test)
+# Two distinct pixels in different snow regimes (used by invert_array2d test).
+# float32 — imagery spectra cross the float32 boundary into the C++ kernel.
 _pixel_a_target = np.array(
-    [0.3424, 0.366, 0.3624, 0.38932347, 0.41624767, 0.39567757, 0.07043362, 0.06267947, 0.3792])
+    [0.3424, 0.366, 0.3624, 0.38932347, 0.41624767, 0.39567757, 0.07043362, 0.06267947, 0.3792], dtype=np.float32)
 _pixel_a_background = np.array(
-    [0.0182, 0.0265, 0.0283, 0.056067, 0.095432, 0.12036866, 0.12491679, 0.07888655, 0.1406])
+    [0.0182, 0.0265, 0.0283, 0.056067, 0.095432, 0.12036866, 0.12491679, 0.07888655, 0.1406], dtype=np.float32)
 _pixel_b_target = np.array(
-    [0.2866, 0.3046, 0.324, 0.34468558, 0.35373732, 0.35651454, 0.18072593, 0.16601688, 0.3488])
+    [0.2866, 0.3046, 0.324, 0.34468558, 0.35373732, 0.35651454, 0.18072593, 0.16601688, 0.3488], dtype=np.float32)
 _pixel_b_background = np.array(
-    [0.1002, 0.1492, 0.2088, 0.21797800, 0.23149200, 0.25140200, 0.31030660, 0.28750810, 0.2546])
+    [0.1002, 0.1492, 0.2088, 0.21797800, 0.23149200, 0.25140200, 0.31030660, 0.28750810, 0.2546], dtype=np.float32)
 
 
 def test_invert_array2d():
@@ -168,7 +171,7 @@ def test_invert_array2d():
 
     # Residual: the recovered parameters must reproduce the observed spectrum
     # within tolerance. This is the actual contract of the inversion.
-    spectrum_shade = np.zeros_like(_pixel_a_target)
+    spectrum_shade = np.zeros_like(_pixel_a_target, dtype=np.float64)
     for row, target, background in [(0, _pixel_a_target, _pixel_a_background),
                                     (1, _pixel_b_target, _pixel_b_background)]:
         residual = spires_inversion.core.spectrum_difference(
@@ -201,7 +204,7 @@ def _residual(x, target, background):
         x=list(x),
         spectrum_background=background,
         spectrum_target=target,
-        spectrum_shade=np.zeros_like(target),
+        spectrum_shade=np.zeros_like(target, dtype=np.float64),
         solar_angle=solar_angle,
         lut_bands=interpolator.bands,
         lut_solar_angles=interpolator.solar_angles,

@@ -69,3 +69,13 @@ def test_wrong_dim_order_raises_clear_error(lut_dataarray):
     targets_t = targets.transpose('band', 'y', 'x')  # legal data, wrong order
     with pytest.raises(ContractError):
         speedy_invert_xarray(targets_t, backgrounds, angles, lut_dataarray)
+
+
+def test_float64_lut_raises_clear_error(lut_dataarray):
+    """A float64 LUT is rejected by the LUT contract (validate_lut) on entry,
+    rather than reaching the float32-strict C++ typemap as a cryptic failure."""
+    n_bands = lut_dataarray.sizes['band']
+    targets, backgrounds, angles = _scene(n_bands)
+    lut64 = lut_dataarray.astype(np.float64)
+    with pytest.raises(ContractError):
+        speedy_invert_xarray(targets, backgrounds, angles, lut64)

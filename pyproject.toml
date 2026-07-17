@@ -34,7 +34,7 @@ dependencies = [
     # contract validators are called at the speedy_invert_xarray boundary.
     # Not yet on PyPI -> pinned tag from GitHub (swap for a version spec once
     # it publishes).
-    "spires-contract @ git+https://github.com/SPIReS-Organization/spires-contract@v0.2.0",
+    "spires-contract @ git+https://github.com/SPIReS-Organization/spires-contract@v0.3.0",
     "numpy",
     "h5py",
     "scipy",
@@ -85,12 +85,14 @@ exclude = ["tests*", "tests.*"]
 
 
 [tool.pytest.ini_options]
-# Only collect tests from these directories
-testpaths = ["tests"]
+# Collect unit tests from tests/ AND doctests from the spires_inversion package.
+# (testpaths scopes collection; --doctest-modules only takes effect for packages
+# that are actually in the collection roots, so spires_inversion must be listed.)
+testpaths = ["tests", "spires_inversion"]
 # Add spires_inversion to python path to avoid import mismatches
 pythonpath = ["."]
 # Don't collect from examples (they require optional dependencies)
-norecursedirs = ["examples", "doc", "build", "dist", ".git", ".tox"]
+norecursedirs = ["examples", "doc", "build", "dist", ".git", ".tox", "*.ipynb_checkpoints"]
 # Collect doctests from spires_inversion package
 addopts = "--doctest-modules --ignore=tests/example.py"
 # Configure doctest behavior

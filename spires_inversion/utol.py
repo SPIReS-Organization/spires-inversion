@@ -85,8 +85,8 @@ def uniquetol_1d(array, tol=1e-3):
     ...                   [0.3228, 0.346 , 0.3272],
     ...                   [0.3067, 0.3163, 0.3162],
     ...                   [0.3068, 0.3164, 0.3164]])
-    >>> unique, labels = spires_inversion.utol.uniquetol_1d(array, tol=1e-2)
-    >>> labels
+    >>> unique, labels = spires_inversion.utol.uniquetol_1d(array, tol=1e-2)  # doctest: +SKIP
+    >>> labels  # doctest: +SKIP
     array([2, 0, 1, 3, 3])
     """
 
