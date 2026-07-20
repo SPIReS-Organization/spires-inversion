@@ -29,17 +29,18 @@ def lut_dataarray():
 
 def _scene(n_bands):
     """A tiny 2x3 scene of target/background spectra and solar angles, built in
-    CANONICAL (y, x, band) / (y, x) order, float64, with a band coordinate."""
+    CANONICAL (y, x, band) / (y, x) order, float32 (the contract dtype), with a
+    band coordinate."""
     ny, nx = 2, 3
-    rng = np.arange(ny * nx * n_bands, dtype=np.float64).reshape(ny, nx, n_bands)
+    rng = np.arange(ny * nx * n_bands, dtype=np.float32).reshape(ny, nx, n_bands)
     targets = xr.DataArray(
-        0.3 + 0.01 * rng, dims=('y', 'x', 'band'),
+        (0.3 + 0.01 * rng).astype(np.float32), dims=('y', 'x', 'band'),
         coords={'band': np.arange(n_bands)})
     backgrounds = xr.DataArray(
-        0.1 + 0.01 * rng, dims=('y', 'x', 'band'),
+        (0.1 + 0.01 * rng).astype(np.float32), dims=('y', 'x', 'band'),
         coords={'band': np.arange(n_bands)})
     angles = xr.DataArray(
-        np.full((ny, nx), 50.0), dims=('y', 'x'))
+        np.full((ny, nx), 50.0, dtype=np.float32), dims=('y', 'x'))
     return targets, backgrounds, angles
 
 
@@ -68,3 +69,13 @@ def test_wrong_dim_order_raises_clear_error(lut_dataarray):
     targets_t = targets.transpose('band', 'y', 'x')  # legal data, wrong order
     with pytest.raises(ContractError):
         speedy_invert_xarray(targets_t, backgrounds, angles, lut_dataarray)
+
+
+def test_float64_lut_raises_clear_error(lut_dataarray):
+    """A float64 LUT is rejected by the LUT contract (validate_lut) on entry,
+    rather than reaching the float32-strict C++ typemap as a cryptic failure."""
+    n_bands = lut_dataarray.sizes['band']
+    targets, backgrounds, angles = _scene(n_bands)
+    lut64 = lut_dataarray.astype(np.float64)
+    with pytest.raises(ContractError):
+        speedy_invert_xarray(targets, backgrounds, angles, lut64)

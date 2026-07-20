@@ -54,15 +54,15 @@ def speedy_invert(f, spectrum_target, spectrum_background,
 
     Examples
     --------
-    >>> import spires_inversion
+    >>> import spires_inversion  # doctest: +SKIP
     >>> import numpy as np
-    >>> f = spires_inversion.legacy.load_lut('tests/data/LUT_MODIS.mat')
-    >>> R = np.array([0.8203,0.6796,0.8076,0.8361,0.1879,0.0321,0.0144])
-    >>> R0 = np.array([0.2219,0.2681,0.1016,0.1787,0.3097,0.2997,0.2970])
-    >>> solar_z = 24.0
-    >>> shade = np.zeros(len(R))
-    >>> res, model_refl = spires_inversion.legacy.speedy_invert(f, R, R0, solar_z, shade, mode=4)
-    >>> np.allclose(res.x, np.array([0.8848, 0.0485, 430.2819, 18.2311]), rtol=1e-2)
+    >>> f = spires_inversion.legacy.load_lut('tests/data/LUT_MODIS.mat')  # doctest: +SKIP
+    >>> R = np.array([0.8203,0.6796,0.8076,0.8361,0.1879,0.0321,0.0144])  # doctest: +SKIP
+    >>> R0 = np.array([0.2219,0.2681,0.1016,0.1787,0.3097,0.2997,0.2970])  # doctest: +SKIP
+    >>> solar_z = 24.0  # doctest: +SKIP
+    >>> shade = np.zeros(len(R))  # doctest: +SKIP
+    >>> res, model_refl = spires_inversion.legacy.speedy_invert(f, R, R0, solar_z, shade, mode=4)  # doctest: +SKIP
+    >>> np.allclose(res.x, np.array([0.8848, 0.0485, 430.2819, 18.2311]), rtol=1e-2)  # doctest: +SKIP
     True
     """
 

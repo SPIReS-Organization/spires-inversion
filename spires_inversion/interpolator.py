@@ -27,8 +27,8 @@ def get_index(coordinates: np.array, value: float) -> float:
     >>> coordinates = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
     >>> value = 1.5
     >>> index = spires_inversion.get_index(coordinates, value)
-    >>> index == 1.5
-    True
+    >>> float(index)
+    1.5
     """
 
     right_idx = np.searchsorted(coordinates, value, side='right')
@@ -119,7 +119,9 @@ class LutInterpolator:
         if lut_file is not None:
             self.load_mat(lut_file)
         else:
-            self.reflectances = reflectances
+            # LUT stored as float32 (boundary dtype); coords stay as given.
+            self.reflectances = (np.ascontiguousarray(reflectances, dtype=np.float32)
+                                 if reflectances is not None else reflectances)
             self.bands = bands
             self.solar_angles = solar_angles
             self.dust_concentrations = dust_concentrations
@@ -154,7 +156,12 @@ class LutInterpolator:
 
         """
         with netCDF4.Dataset(lut_file) as lut_nc:
-            self.reflectances = np.squeeze(lut_nc['#refs#']["h"][:])
+            # The LUT is stored as float32 (the io->inversion boundary dtype): the
+            # C++ kernel stores float32 and promotes to double at read time, so a
+            # legacy float64 .mat is down-cast here once at load. Coordinate axes
+            # stay float64. See spires_contract.validate_lut.
+            self.reflectances = np.ascontiguousarray(
+                np.squeeze(lut_nc['#refs#']["h"][:]), dtype=np.float32)
             self.grain_sizes = np.squeeze(lut_nc['#refs#']['d'][:])
             self.dust_concentrations = np.squeeze(lut_nc['#refs#']['e'][:])
             self.solar_angles = np.squeeze(lut_nc['#refs#']['f'][:])
@@ -323,10 +330,11 @@ class LutInterpolator:
         Examples
         ----------
         >>> import spires_inversion
+        >>> import numpy as np
         >>> interpolator = spires_inversion.LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
-        >>> interpolator.interpolate_all_np_index(solar_angle=0, dust_concentration=0.1, grain_size=30)
-        array([0.99236893, 0.987902  , 0.97464906, 0.96756319, 0.96042174,
-               0.94498655, 0.1533866 , 0.18644477, 0.92160772])
+        >>> np.round(interpolator.interpolate_all_np_index(solar_angle=0, dust_concentration=0.1, grain_size=30), 6)
+        array([0.992369, 0.987902, 0.974649, 0.967563, 0.960422, 0.944987,
+               0.153387, 0.186445, 0.921608])
 
         """
         solar_idx = get_index(coordinates=self.solar_angles, value=solar_angle)
@@ -360,10 +368,11 @@ class LutInterpolator:
         Examples
         --------
         >>> import spires_inversion
+        >>> import numpy as np
         >>> interpolator = spires_inversion.LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
-        >>> interpolator.interpolate_all(solar_angle=0, dust_concentration=0.1, grain_size=30)
-        array([0.99236893, 0.987902  , 0.97464906, 0.96756319, 0.96042174,
-               0.94498655, 0.1533866 , 0.18644477, 0.92160772])
+        >>> np.round(interpolator.interpolate_all(solar_angle=0, dust_concentration=0.1, grain_size=30), 6)
+        array([0.992369, 0.987902, 0.974649, 0.967563, 0.960422, 0.944987,
+               0.153387, 0.186445, 0.921608])
 
         """
 

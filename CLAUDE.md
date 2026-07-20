@@ -73,6 +73,28 @@ python -m build --wheel
 - **Scaling in optimization**: Different coordinate scales require problem scaling (see line 344-346)
 - **COBYLA vs SLSQP**: SLSQP doesn't work in C++, using LN_COBYLA instead
 - **Git LFS**: Test data stored in LFS, need `git lfs install`
+- **float32 everywhere**: the inversion is **float32-only** end-to-end — both the
+  batch path (`invert_array1d` / `invert_array2d`) AND the single-pixel `invert()`
+  / `interpolate_*` / `spectrum_difference*` path. The big arrays (imagery
+  targets/backgrounds + LUT reflectances) are stored as float32 to halve memory;
+  the C++ kernel is templated on storage type (`interpolate_idx_impl<T>`,
+  `spectrum_difference*_impl<T>`, `invert_impl<T>`, `invert_array2d_impl<T>`) and
+  promotes every value to `double` on read, so math + NLopt stay `double`
+  (identical numerics). float32 is a property of the C++ `float*` **signature**,
+  not a name suffix — every entry point carries its plain name (no `_f32`).
+  Coordinate axes (`lut_bands`/`solar_angles`/`dust`/`grain`), shade, solar
+  angles, and results are always `double`.
+  - `LutInterpolator` stores `reflectances` as **float32** (cast once at load
+    from the legacy float64 `.mat`); coordinate axes stay float64.
+  - Imagery + LUT dtype is **enforced** in the batch path: `_require_float32` (in
+    `invert.py`) raises `TypeError` on a float64 array rather than silently
+    down-casting (a lossy float64→float32→double round-trip). Producers must emit
+    float32 — `spires-io` does; `spires-contract`'s `ACCEPTED_DTYPES` is
+    float32-only, and `speedy_invert_xarray` calls `validate_lut` on the LUT.
+  - The single-pixel `speedy_invert` **casts** user-supplied spectra to float32
+    (interactive API, not the io contract boundary).
+  - **Do not** pass float64 arrays into the SWIG entry points — the typemaps are
+    dtype-strict `float*` and won't upcast; they raise `TypeError`.
 
 ### File Organization
 ```

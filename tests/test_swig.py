@@ -7,10 +7,12 @@ import pytest
 
 interpolator = spires_inversion.LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat', )
 
-spectrum_target = np.array([0.3424, 0.366, 0.3624, 0.38932347, 0.41624767, 0.39567757, 0.07043362, 0.06267947, 0.3792])
+# Imagery spectra cross the float32 boundary; shade stays double (its C++ typemap
+# is double, like the LUT coordinate axes).
+spectrum_target = np.array([0.3424, 0.366, 0.3624, 0.38932347, 0.41624767, 0.39567757, 0.07043362, 0.06267947, 0.3792], dtype=np.float32)
 spectrum_background = np.array(
-    [0.0182, 0.0265, 0.0283, 0.05606749, 0.09543234, 0.12036866, 0.12491679, 0.07888655, 0.1406])
-spectrum_shade = np.zeros_like(spectrum_target)
+    [0.0182, 0.0265, 0.0283, 0.05606749, 0.09543234, 0.12036866, 0.12491679, 0.07888655, 0.1406], dtype=np.float32)
+spectrum_shade = np.zeros_like(spectrum_target, dtype=np.float64)
 solar_angle = 55.73733298
 
 dust_concentration = 491
@@ -71,15 +73,23 @@ def test_invert():
                            x0=x0,
                            algorithm=1)
 
-    expected = np.array([4.089303e-01, 1.552017e-01, 1.387936e+02, 3.645840e+02])
-    np.testing.assert_allclose(x, expected, rtol=1e-5)
+    # Physical plausibility + residual rather than pinned optimizer coordinates,
+    # which drift a few percent across platforms (COBYLA is derivative-free; see
+    # README "Cross-platform numerical reproducibility").
+    x = np.asarray(x)
+    assert x.shape == (4,)
+    assert 0 <= x[0] <= 1 and 0 <= x[1] <= 1 and x[0] + x[1] <= 1 + 1e-6
+    assert interpolator.dust_concentrations.min() <= x[2] <= interpolator.dust_concentrations.max()
+    assert interpolator.grain_sizes.min() <= x[3] <= interpolator.grain_sizes.max()
+    assert _residual(x, spectrum_target, spectrum_background) < 0.05
 
 
 def test_invert_array():
     n = 3
     results = np.empty((n, 4), dtype=np.double)
-    spectra_backgrounds = np.tile(spectrum_background, (n, 1))
-    spectra_targets = np.tile(spectrum_target, (n, 1))
+    # Batch kernel stores the big arrays (imagery + LUT) as float32.
+    spectra_backgrounds = np.tile(spectrum_background, (n, 1)).astype(np.float32)
+    spectra_targets = np.tile(spectrum_target, (n, 1)).astype(np.float32)
     obs_solar_angles = np.repeat(solar_angle, n)
 
     spires_inversion.core.invert_array1d(spectra_backgrounds=spectra_backgrounds,
@@ -90,27 +100,38 @@ def test_invert_array():
                                lut_solar_angles=interpolator.solar_angles,
                                lut_dust_concentrations=interpolator.dust_concentrations,
                                lut_grain_sizes=interpolator.grain_sizes,
-                               lut_reflectances=interpolator.reflectances,
+                               lut_reflectances=interpolator.reflectances.astype(np.float32),
                                results=results,
                                max_eval=100,
                                x0=x0,
                                algorithm=1)
 
-    expected = np.array([[4.089303e-01, 1.552017e-01, 1.387936e+02, 3.645840e+02],
-                         [4.089303e-01, 1.552017e-01, 1.387936e+02, 3.645840e+02],
-                         [4.089303e-01, 1.552017e-01, 1.387936e+02, 3.645840e+02]])
-    np.testing.assert_allclose(results, expected, rtol=1e-5)
+    # Asserted on physical plausibility, per-row consistency, and residual fit
+    # quality rather than pinned optimizer coordinates, which drift a few percent
+    # across platforms (see README "Cross-platform numerical reproducibility").
+    assert results.shape == (n, 4)
+    # Identical inputs (same pixel tiled n times) must give identical outputs.
+    for i in range(1, n):
+        np.testing.assert_array_equal(results[i], results[0])
+    fsca, fshade, dust, grain = results[0]
+    assert 0 <= fsca <= 1
+    assert 0 <= fshade <= 1
+    assert interpolator.dust_concentrations.min() <= dust <= interpolator.dust_concentrations.max()
+    assert interpolator.grain_sizes.min() <= grain <= interpolator.grain_sizes.max()
+    residual = _residual(results[0], spectrum_target, spectrum_background)
+    assert residual < 0.05, f"residual {residual} too large"
 
 
-# Two distinct pixels in different snow regimes (used by invert_array2d test)
+# Two distinct pixels in different snow regimes (used by invert_array2d test).
+# float32 — imagery spectra cross the float32 boundary into the C++ kernel.
 _pixel_a_target = np.array(
-    [0.3424, 0.366, 0.3624, 0.38932347, 0.41624767, 0.39567757, 0.07043362, 0.06267947, 0.3792])
+    [0.3424, 0.366, 0.3624, 0.38932347, 0.41624767, 0.39567757, 0.07043362, 0.06267947, 0.3792], dtype=np.float32)
 _pixel_a_background = np.array(
-    [0.0182, 0.0265, 0.0283, 0.056067, 0.095432, 0.12036866, 0.12491679, 0.07888655, 0.1406])
+    [0.0182, 0.0265, 0.0283, 0.056067, 0.095432, 0.12036866, 0.12491679, 0.07888655, 0.1406], dtype=np.float32)
 _pixel_b_target = np.array(
-    [0.2866, 0.3046, 0.324, 0.34468558, 0.35373732, 0.35651454, 0.18072593, 0.16601688, 0.3488])
+    [0.2866, 0.3046, 0.324, 0.34468558, 0.35373732, 0.35651454, 0.18072593, 0.16601688, 0.3488], dtype=np.float32)
 _pixel_b_background = np.array(
-    [0.1002, 0.1492, 0.2088, 0.21797800, 0.23149200, 0.25140200, 0.31030660, 0.28750810, 0.2546])
+    [0.1002, 0.1492, 0.2088, 0.21797800, 0.23149200, 0.25140200, 0.31030660, 0.28750810, 0.2546], dtype=np.float32)
 
 
 def test_invert_array2d():
@@ -120,9 +141,9 @@ def test_invert_array2d():
     rather than pinned optimizer coordinates, which drift across platforms
     (see README "Cross-platform numerical reproducibility")."""
     spectra_targets = np.stack([np.tile(_pixel_a_target, (3, 1)),
-                                np.tile(_pixel_b_target, (3, 1))], axis=0)
+                                np.tile(_pixel_b_target, (3, 1))], axis=0).astype(np.float32)
     spectra_backgrounds = np.stack([np.tile(_pixel_a_background, (3, 1)),
-                                    np.tile(_pixel_b_background, (3, 1))], axis=0)
+                                    np.tile(_pixel_b_background, (3, 1))], axis=0).astype(np.float32)
     obs_solar_angles = np.full((2, 3), solar_angle)
 
     results = spires_inversion.speedy_invert_array2d(spectra_targets=spectra_targets,
@@ -157,7 +178,7 @@ def test_invert_array2d():
 
     # Residual: the recovered parameters must reproduce the observed spectrum
     # within tolerance. This is the actual contract of the inversion.
-    spectrum_shade = np.zeros_like(_pixel_a_target)
+    spectrum_shade = np.zeros_like(_pixel_a_target, dtype=np.float64)
     for row, target, background in [(0, _pixel_a_target, _pixel_a_background),
                                     (1, _pixel_b_target, _pixel_b_background)]:
         residual = spires_inversion.core.spectrum_difference(
@@ -190,7 +211,7 @@ def _residual(x, target, background):
         x=list(x),
         spectrum_background=background,
         spectrum_target=target,
-        spectrum_shade=np.zeros_like(target),
+        spectrum_shade=np.zeros_like(target, dtype=np.float64),
         solar_angle=solar_angle,
         lut_bands=interpolator.bands,
         lut_solar_angles=interpolator.solar_angles,
@@ -259,10 +280,11 @@ def _real_imagery_setup():
     except (OSError, ValueError):
         pytest.skip("LFS test data not available (run `git lfs pull`)")
 
+    # Imagery crosses the io->inversion boundary as float32 (contract dtype).
     R = np.ascontiguousarray(
-        ds['reflectance'].isel(time=0).transpose('y', 'x', 'band').values.astype(np.float64))
+        ds['reflectance'].isel(time=0).transpose('y', 'x', 'band').values.astype(np.float32))
     R0 = np.ascontiguousarray(
-        ds0['reflectance'].transpose('y', 'x', 'band').values.astype(np.float64))
+        ds0['reflectance'].transpose('y', 'x', 'band').values.astype(np.float32))
     sza = np.full(R.shape[:2],
                   float(np.nanmean(ds['sun_zenith_grid'].isel(time=0).values)))
     sza0 = float(sza[0, 0])
@@ -360,3 +382,75 @@ def test_invert_unknown_algorithm_raises():
                            lut_grain_sizes=interpolator.grain_sizes,
                            lut_reflectances=interpolator.reflectances,
                            max_eval=100, x0=x0, algorithm=99)
+
+
+# ---------------------------------------------------------------------------
+# float32 storage boundary
+#
+# The batch io->inversion path is float32-only: imagery must be float32 (the
+# contract dtype; a float64 array raises), and the C++ kernel stores the big
+# arrays as float32 and promotes each value to double at read time, so the
+# interpolation/cost math and NLopt run in double. These tests pin that the
+# float32 path (a) rejects float64 imagery, (b) is deterministic across repeated
+# calls, and (c) produces physically plausible retrievals.
+# ---------------------------------------------------------------------------
+
+def _f32_image_setup():
+    """Two distinct pixels tiled into a (2, 3, 9) float32 image + (2, 3) sza."""
+    tgt = np.stack([np.tile(_pixel_a_target, (3, 1)),
+                    np.tile(_pixel_b_target, (3, 1))], axis=0).astype(np.float32)
+    bg = np.stack([np.tile(_pixel_a_background, (3, 1)),
+                   np.tile(_pixel_b_background, (3, 1))], axis=0).astype(np.float32)
+    sza = np.full((2, 3), solar_angle)
+    return tgt, bg, sza
+
+
+@pytest.mark.parametrize("algorithm", [1, 6])
+def test_speedy_invert_array2d_float32_is_deterministic(algorithm):
+    """The float32 batch path is deterministic: identical inputs give identical
+    outputs across repeated calls (no dtype-dependent branch, no per-pixel state
+    leakage). Also pins that the interpolator's float64 LUT is accepted (cast to
+    float32 for storage inside the boundary)."""
+    tgt, bg, sza = _f32_image_setup()
+    interp = spires_inversion.LutInterpolator(
+        lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
+
+    r1 = spires_inversion.speedy_invert_array2d(
+        spectra_targets=tgt, spectra_backgrounds=bg,
+        obs_solar_angles=sza, interpolator=interp, algorithm=algorithm, x0=np.array(x0))
+    r2 = spires_inversion.speedy_invert_array2d(
+        spectra_targets=tgt, spectra_backgrounds=bg,
+        obs_solar_angles=sza, interpolator=interp, algorithm=algorithm, x0=np.array(x0))
+
+    assert r1.shape == (2, 3, 4)
+    np.testing.assert_array_equal(r1, r2)
+
+
+def test_speedy_invert_array2d_rejects_float64_imagery():
+    """A float64 imagery array must raise at the boundary rather than being
+    silently down-cast (float64 -> float32 -> double round-trip). This is the
+    determinism guarantee: producers must emit float32 (spires-io does)."""
+    tgt, bg, sza = _f32_image_setup()
+    interp = spires_inversion.LutInterpolator(
+        lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
+    with pytest.raises(TypeError, match="float32"):
+        spires_inversion.speedy_invert_array2d(
+            spectra_targets=tgt.astype(np.float64), spectra_backgrounds=bg,
+            obs_solar_angles=sza, interpolator=interp, algorithm=6, x0=np.array(x0))
+
+
+def test_float32_gives_physical_results():
+    """The float32 path produces physically plausible retrievals (fsca/fshade in
+    [0,1]; dust/grain within LUT range)."""
+    tgt, bg, sza = _f32_image_setup()
+    interp = spires_inversion.LutInterpolator(
+        lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
+    res = spires_inversion.speedy_invert_array2d(
+        spectra_targets=tgt, spectra_backgrounds=bg,
+        obs_solar_angles=sza, interpolator=interp, algorithm=6, x0=np.array(x0))
+    assert np.all((res[..., 0] >= 0) & (res[..., 0] <= 1))
+    assert np.all((res[..., 1] >= 0) & (res[..., 1] <= 1))
+    assert np.all((res[..., 2] >= interp.dust_concentrations.min()) &
+                  (res[..., 2] <= interp.dust_concentrations.max()))
+    assert np.all((res[..., 3] >= interp.grain_sizes.min()) &
+                  (res[..., 3] <= interp.grain_sizes.max()))

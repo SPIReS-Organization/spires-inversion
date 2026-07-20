@@ -17,8 +17,15 @@ static inline double linearInterpolate(double y1, double y2, double x, double x1
 }
 
 
-double interpolate_idx(double* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
-                       int band_idx, double solar_angle_idx, double dust_concentration_idx, double grain_size_idx) {
+// Templated on the LUT storage type `T` (float or double). The LUT is stored
+// as `T` (float32 halves its memory); every value read out of it is promoted to
+// `double` here, so all interpolation arithmetic is done in full double
+// precision regardless of storage. For T=double the emitted code is identical
+// to the original. The public non-template `interpolate_idx(double*, ...)` below
+// (SWIG-exposed, used by tests and the double path) delegates to T=double.
+template<typename T>
+double interpolate_idx_impl(const T* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
+                            int band_idx, double solar_angle_idx, double dust_concentration_idx, double grain_size_idx) {
 
     // Half-open contract: valid index ranges are [0, n_*).
     if (band_idx < 0 || band_idx >= n_lut_bands ||
@@ -31,7 +38,7 @@ double interpolate_idx(double* lut_reflectances, int n_lut_bands, int n_lut_sola
 
     // Select the 3D cube for this band; we interpolate in solar/dust/grain only.
     int start_idx = band_idx * (n_lut_solar_angles * n_lut_dust_concentrations * n_lut_grain_sizes);
-    double* cube = lut_reflectances + start_idx;
+    const T* cube = lut_reflectances + start_idx;
 
     int iz1 = static_cast<int>(solar_angle_idx);
     int id1 = static_cast<int>(dust_concentration_idx);
@@ -68,7 +75,18 @@ double interpolate_idx(double* lut_reflectances, int n_lut_bands, int n_lut_sola
 }
 
 
-std::vector<double> interpolate_all_idx(double* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
+// Public float32-storage entry (SWIG-exposed). The LUT is stored as float32;
+// every value is promoted to double at read time inside the templated impl, so
+// the interpolation arithmetic is done in full double precision. float32 is a
+// property of the storage signature, not a name suffix.
+double interpolate_idx(float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
+                       int band_idx, double solar_angle_idx, double dust_concentration_idx, double grain_size_idx) {
+    return interpolate_idx_impl<float>(lut_reflectances, n_lut_bands, n_lut_solar_angles, n_lut_dust_concentrations, n_lut_grain_sizes,
+                                        band_idx, solar_angle_idx, dust_concentration_idx, grain_size_idx);
+}
+
+
+std::vector<double> interpolate_all_idx(float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
                                         double solar_angle_idx, double dust_concentration_idx, double grain_size_idx) {
     std::vector<double> spectrum(n_lut_bands);
     for (int band_idx = 0; band_idx < n_lut_bands; band_idx++) {
@@ -81,7 +99,7 @@ std::vector<double> interpolate_all_idx(double* lut_reflectances, int n_lut_band
 
 // In-place variant: writes into a caller-supplied buffer to avoid the heap
 // allocation in the optimizer's hot path. Caller guarantees |out| >= n_lut_bands.
-static inline void interpolate_all_idx_into(double* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
+static inline void interpolate_all_idx_into(float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
                                             double solar_angle_idx, double dust_concentration_idx, double grain_size_idx,
                                             double* out) {
     for (int band_idx = 0; band_idx < n_lut_bands; band_idx++) {
@@ -126,7 +144,7 @@ double get_idx(double value, double* coordinates, int len_coordinates) {
 }
 
 
-double interpolate(double* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
+double interpolate(float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
                    double* lut_bands, int len_lut_bands,
                    double* lut_solar_angles, int len_lut_solar_angles,
                    double* lut_dust_concentrations, int len_lut_dust_concentrations,
@@ -144,7 +162,7 @@ double interpolate(double* lut_reflectances, int n_lut_bands, int n_lut_solar_an
 }
 
 
-std::vector<double> interpolate_all(double* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
+std::vector<double> interpolate_all(float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
                                     double* lut_bands, int len_lut_bands,
                                     double* lut_solar_angles, int len_lut_solar_angles,
                                     double* lut_dust_concentrations, int len_lut_dust_concentrations,
@@ -160,7 +178,7 @@ std::vector<double> interpolate_all(double* lut_reflectances, int n_lut_bands, i
 }
 
 
-double* interpolate_all_array(double* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
+double* interpolate_all_array(float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
                               double* lut_bands, int len_lut_bands,
                               double* lut_solar_angles, int len_lut_solar_angles,
                               double* lut_dust_concentrations, int len_lut_dust_concentrations,
@@ -184,16 +202,24 @@ double* interpolate_all_array(double* lut_reflectances, int n_lut_bands, int n_l
 // Spectrum-difference cost (fused, allocation-free)
 // ----------------------------------------------------------------------------
 
-double spectrum_difference(const std::vector<double>& x,
-                           double* spectrum_background, int len_background,
-                           double* spectrum_target, int len_target,
-                           double* spectrum_shade, int len_shade,
-                           double solar_angle,
-                           double* lut_bands, int len_lut_bands,
-                           double* lut_solar_angles, int len_lut_solar_angles,
-                           double* lut_dust_concentrations, int len_lut_dust_concentrations,
-                           double* lut_grain_sizes, int len_lut_grain_sizes,
-                           double* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes) {
+// Templated on storage type `T` (float or double) for the big arrays: the
+// imagery (spectrum_target / spectrum_background) and the LUT (lut_reflectances).
+// Every value read from them is promoted to double for the arithmetic; the cost
+// is computed entirely in double. `spectrum_shade` and the LUT coordinate axes
+// stay double (small arrays). For T=double the emitted code matches the
+// original. The public double `spectrum_difference` (SWIG-exposed, used by
+// tests) delegates to T=double.
+template<typename T>
+double spectrum_difference_impl(const std::vector<double>& x,
+                                const T* spectrum_background, int len_background,
+                                const T* spectrum_target, int len_target,
+                                double* spectrum_shade, int len_shade,
+                                double solar_angle,
+                                double* lut_bands, int len_lut_bands,
+                                double* lut_solar_angles, int len_lut_solar_angles,
+                                double* lut_dust_concentrations, int len_lut_dust_concentrations,
+                                double* lut_grain_sizes, int len_lut_grain_sizes,
+                                const T* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes) {
     /*
     Euclidean distance between modeled and measured reflectance.
     x = [f_sca, f_shade, dust, grain_size]
@@ -214,13 +240,36 @@ double spectrum_difference(const std::vector<double>& x,
 
     double diff_sq = 0.0;
     for (int i = 0; i < len_target; ++i) {
-        double model_pure = interpolate_idx(lut_reflectances, n_lut_bands, n_lut_solar_angles, n_lut_dust_concentrations, n_lut_grain_sizes,
-                                            i, solar_angle_idx, dust_idx, grain_idx);
+        double model_pure = interpolate_idx_impl<T>(lut_reflectances, n_lut_bands, n_lut_solar_angles, n_lut_dust_concentrations, n_lut_grain_sizes,
+                                                    i, solar_angle_idx, dust_idx, grain_idx);
         double model = model_pure * f_sca + spectrum_shade[i] * f_shade + spectrum_background[i] * f_bg;
         double d = spectrum_target[i] - model;
         diff_sq += d * d;
     }
     return std::sqrt(diff_sq);
+}
+
+
+double spectrum_difference(const std::vector<double>& x,
+                           float* spectrum_background, int len_background,
+                           float* spectrum_target, int len_target,
+                           double* spectrum_shade, int len_shade,
+                           double solar_angle,
+                           double* lut_bands, int len_lut_bands,
+                           double* lut_solar_angles, int len_lut_solar_angles,
+                           double* lut_dust_concentrations, int len_lut_dust_concentrations,
+                           double* lut_grain_sizes, int len_lut_grain_sizes,
+                           float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes) {
+    return spectrum_difference_impl<float>(x,
+                                            spectrum_background, len_background,
+                                            spectrum_target, len_target,
+                                            spectrum_shade, len_shade,
+                                            solar_angle,
+                                            lut_bands, len_lut_bands,
+                                            lut_solar_angles, len_lut_solar_angles,
+                                            lut_dust_concentrations, len_lut_dust_concentrations,
+                                            lut_grain_sizes, len_lut_grain_sizes,
+                                            lut_reflectances, n_lut_bands, n_lut_solar_angles, n_lut_dust_concentrations, n_lut_grain_sizes);
 }
 
 
@@ -302,16 +351,17 @@ std::vector<double> x_to_z(const std::vector<double>& x,
 }
 
 
-double spectrum_difference_hybrid(const std::vector<double>& y,
-                                  double* spectrum_background, int len_background,
-                                  double* spectrum_target, int len_target,
-                                  double* spectrum_shade, int len_shade,
-                                  double solar_angle,
-                                  double* lut_bands, int len_lut_bands,
-                                  double* lut_solar_angles, int len_lut_solar_angles,
-                                  double* lut_dust_concentrations, int len_lut_dust_concentrations,
-                                  double* lut_grain_sizes, int len_lut_grain_sizes,
-                                  double* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes) {
+template<typename T>
+double spectrum_difference_hybrid_impl(const std::vector<double>& y,
+                                       const T* spectrum_background, int len_background,
+                                       const T* spectrum_target, int len_target,
+                                       double* spectrum_shade, int len_shade,
+                                       double solar_angle,
+                                       double* lut_bands, int len_lut_bands,
+                                       double* lut_solar_angles, int len_lut_solar_angles,
+                                       double* lut_dust_concentrations, int len_lut_dust_concentrations,
+                                       double* lut_grain_sizes, int len_lut_grain_sizes,
+                                       const T* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes) {
     /*
     Hybrid spectral-difference cost:
       - Fractions (f_sca, f_shade, f_bg) via softmax of (y[0], y[1], 0).
@@ -345,13 +395,36 @@ double spectrum_difference_hybrid(const std::vector<double>& y,
 
     double diff_sq = 0.0;
     for (int i = 0; i < len_target; ++i) {
-        double model_pure = interpolate_idx(lut_reflectances, n_lut_bands, n_lut_solar_angles, n_lut_dust_concentrations, n_lut_grain_sizes,
-                                            i, solar_angle_idx, dust_idx, grain_idx);
+        double model_pure = interpolate_idx_impl<T>(lut_reflectances, n_lut_bands, n_lut_solar_angles, n_lut_dust_concentrations, n_lut_grain_sizes,
+                                                    i, solar_angle_idx, dust_idx, grain_idx);
         double model = model_pure * f_sca + spectrum_shade[i] * f_shade + spectrum_background[i] * f_bg;
         double d = spectrum_target[i] - model;
         diff_sq += d * d;
     }
     return std::sqrt(diff_sq);
+}
+
+
+double spectrum_difference_hybrid(const std::vector<double>& y,
+                                  float* spectrum_background, int len_background,
+                                  float* spectrum_target, int len_target,
+                                  double* spectrum_shade, int len_shade,
+                                  double solar_angle,
+                                  double* lut_bands, int len_lut_bands,
+                                  double* lut_solar_angles, int len_lut_solar_angles,
+                                  double* lut_dust_concentrations, int len_lut_dust_concentrations,
+                                  double* lut_grain_sizes, int len_lut_grain_sizes,
+                                  float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes) {
+    return spectrum_difference_hybrid_impl<float>(y,
+                                                   spectrum_background, len_background,
+                                                   spectrum_target, len_target,
+                                                   spectrum_shade, len_shade,
+                                                   solar_angle,
+                                                   lut_bands, len_lut_bands,
+                                                   lut_solar_angles, len_lut_solar_angles,
+                                                   lut_dust_concentrations, len_lut_dust_concentrations,
+                                                   lut_grain_sizes, len_lut_grain_sizes,
+                                                   lut_reflectances, n_lut_bands, n_lut_solar_angles, n_lut_dust_concentrations, n_lut_grain_sizes);
 }
 
 
@@ -381,16 +454,17 @@ std::vector<double> x_to_y_hybrid(const std::vector<double>& x) {
 }
 
 
-double spectrum_difference_softmax(const std::vector<double>& z,
-                                   double* spectrum_background, int len_background,
-                                   double* spectrum_target, int len_target,
-                                   double* spectrum_shade, int len_shade,
-                                   double solar_angle,
-                                   double* lut_bands, int len_lut_bands,
-                                   double* lut_solar_angles, int len_lut_solar_angles,
-                                   double* lut_dust_concentrations, int len_lut_dust_concentrations,
-                                   double* lut_grain_sizes, int len_lut_grain_sizes,
-                                   double* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes) {
+template<typename T>
+double spectrum_difference_softmax_impl(const std::vector<double>& z,
+                                        const T* spectrum_background, int len_background,
+                                        const T* spectrum_target, int len_target,
+                                        double* spectrum_shade, int len_shade,
+                                        double solar_angle,
+                                        double* lut_bands, int len_lut_bands,
+                                        double* lut_solar_angles, int len_lut_solar_angles,
+                                        double* lut_dust_concentrations, int len_lut_dust_concentrations,
+                                        double* lut_grain_sizes, int len_lut_grain_sizes,
+                                        const T* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes) {
     /*
     Spectral-difference cost in unconstrained (softmax-reparameterized)
     coordinates. Unconstrained solvers (Nelder-Mead, BOBYQA, BFGS) can be used
@@ -413,13 +487,36 @@ double spectrum_difference_softmax(const std::vector<double>& z,
 
     double diff_sq = 0.0;
     for (int i = 0; i < len_target; ++i) {
-        double model_pure = interpolate_idx(lut_reflectances, n_lut_bands, n_lut_solar_angles, n_lut_dust_concentrations, n_lut_grain_sizes,
-                                            i, solar_angle_idx, dust_idx, grain_idx);
+        double model_pure = interpolate_idx_impl<T>(lut_reflectances, n_lut_bands, n_lut_solar_angles, n_lut_dust_concentrations, n_lut_grain_sizes,
+                                                    i, solar_angle_idx, dust_idx, grain_idx);
         double model = model_pure * f_sca + spectrum_shade[i] * f_shade + spectrum_background[i] * f_bg;
         double d = spectrum_target[i] - model;
         diff_sq += d * d;
     }
     return std::sqrt(diff_sq);
+}
+
+
+double spectrum_difference_softmax(const std::vector<double>& z,
+                                   float* spectrum_background, int len_background,
+                                   float* spectrum_target, int len_target,
+                                   double* spectrum_shade, int len_shade,
+                                   double solar_angle,
+                                   double* lut_bands, int len_lut_bands,
+                                   double* lut_solar_angles, int len_lut_solar_angles,
+                                   double* lut_dust_concentrations, int len_lut_dust_concentrations,
+                                   double* lut_grain_sizes, int len_lut_grain_sizes,
+                                   float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes) {
+    return spectrum_difference_softmax_impl<float>(z,
+                                                    spectrum_background, len_background,
+                                                    spectrum_target, len_target,
+                                                    spectrum_shade, len_shade,
+                                                    solar_angle,
+                                                    lut_bands, len_lut_bands,
+                                                    lut_solar_angles, len_lut_solar_angles,
+                                                    lut_dust_concentrations, len_lut_dust_concentrations,
+                                                    lut_grain_sizes, len_lut_grain_sizes,
+                                                    lut_reflectances, n_lut_bands, n_lut_solar_angles, n_lut_dust_concentrations, n_lut_grain_sizes);
 }
 
 
@@ -441,15 +538,15 @@ double index_to_value(double value, double* coords, int len_coords) {
 
 
 double spectrum_difference_scaled(const std::vector<double>& x,
-                                  double* spectrum_background, int len_background,
-                                  double* spectrum_target, int len_target,
+                                  float* spectrum_background, int len_background,
+                                  float* spectrum_target, int len_target,
                                   double* spectrum_shade, int len_shade,
                                   double solar_angle,
                                   double* lut_bands, int len_lut_bands,
                                   double* lut_solar_angles, int len_lut_solar_angles,
                                   double* lut_dust_concentrations, int len_lut_dust_concentrations,
                                   double* lut_grain_sizes, int len_lut_grain_sizes,
-                                  double* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes) {
+                                  float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes) {
 
     double dust_scaled = index_to_value(x[2], lut_dust_concentrations, len_lut_dust_concentrations);
     double grain_scaled = index_to_value(x[3], lut_grain_sizes, len_lut_grain_sizes);
@@ -473,11 +570,16 @@ double spectrum_difference_scaled(const std::vector<double>& x,
 // NLopt objective wrapping
 // ----------------------------------------------------------------------------
 
+// Templated on the storage type `T` of the big arrays (imagery + LUT). The
+// NLopt wrappers recover a typed ObjectiveData<T>* from the void* cookie and
+// dispatch to the matching _impl<T> cost function. NLopt itself remains fully
+// double (parameter vector, cost, tolerances) — only the array *storage* is T.
+template<typename T>
 struct ObjectiveData {
-    double* lut_reflectances;
+    const T* lut_reflectances;
     int n_lut_bands, n_lut_solar_angles, n_lut_dust_concentrations, n_lut_grain_sizes;
-    double* spectrum_background; int len_background;
-    double* spectrum_target;     int len_target;
+    const T* spectrum_background; int len_background;
+    const T* spectrum_target;     int len_target;
     double* spectrum_shade;      int len_shade;
     double solar_angle;
     double* lut_bands;               int len_lut_bands;
@@ -487,9 +589,10 @@ struct ObjectiveData {
 };
 
 
+template<typename T>
 static double spectrum_difference_wrapper(const std::vector<double>& x, std::vector<double>& /*grad*/, void* data) {
-    ObjectiveData* d = reinterpret_cast<ObjectiveData*>(data);
-    return spectrum_difference(x,
+    ObjectiveData<T>* d = reinterpret_cast<ObjectiveData<T>*>(data);
+    return spectrum_difference_impl<T>(x,
                                d->spectrum_background, d->len_background,
                                d->spectrum_target, d->len_target,
                                d->spectrum_shade, d->len_shade,
@@ -502,9 +605,10 @@ static double spectrum_difference_wrapper(const std::vector<double>& x, std::vec
 }
 
 
+template<typename T>
 static double spectrum_difference_softmax_wrapper(const std::vector<double>& z, std::vector<double>& /*grad*/, void* data) {
-    ObjectiveData* d = reinterpret_cast<ObjectiveData*>(data);
-    return spectrum_difference_softmax(z,
+    ObjectiveData<T>* d = reinterpret_cast<ObjectiveData<T>*>(data);
+    return spectrum_difference_softmax_impl<T>(z,
                                        d->spectrum_background, d->len_background,
                                        d->spectrum_target, d->len_target,
                                        d->spectrum_shade, d->len_shade,
@@ -517,9 +621,10 @@ static double spectrum_difference_softmax_wrapper(const std::vector<double>& z, 
 }
 
 
+template<typename T>
 static double spectrum_difference_hybrid_wrapper(const std::vector<double>& y, std::vector<double>& /*grad*/, void* data) {
-    ObjectiveData* d = reinterpret_cast<ObjectiveData*>(data);
-    return spectrum_difference_hybrid(y,
+    ObjectiveData<T>* d = reinterpret_cast<ObjectiveData<T>*>(data);
+    return spectrum_difference_hybrid_impl<T>(y,
                                       d->spectrum_background, d->len_background,
                                       d->spectrum_target, d->len_target,
                                       d->spectrum_shade, d->len_shade,
@@ -538,32 +643,37 @@ static double constraint(const std::vector<double>& x, std::vector<double>& /*gr
 }
 
 
-static bool spectrum_has_nan(double* spectrum, int len) {
+template<typename T>
+static bool spectrum_has_nan(const T* spectrum, int len) {
     for (int n = 0; n < len; n++) {
-        if (std::isnan(spectrum[n])) return true;
+        if (std::isnan(static_cast<double>(spectrum[n]))) return true;
     }
     return false;
 }
 
 
-std::vector<double> invert(double* spectrum_background, int len_background,
-                           double* spectrum_target, int len_target,
+// Templated inversion for a single pixel. The big arrays (imagery + LUT) are
+// stored as `T`; NLopt runs entirely in double. The public double `invert`
+// (SWIG-exposed, used by tests) delegates to T=double below.
+template<typename T>
+std::vector<double> invert_impl(const T* spectrum_background, int len_background,
+                           const T* spectrum_target, int len_target,
                            double* spectrum_shade, int len_shade,
                            double solar_angle,
                            double* lut_bands, int len_lut_bands,
                            double* lut_solar_angles, int len_lut_solar_angles,
                            double* lut_dust_concentrations, int len_lut_dust_concentrations,
                            double* lut_grain_sizes, int len_lut_grain_sizes,
-                           double* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
+                           const T* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
                            int max_eval,
                            std::vector<double> x0,
                            int algorithm) {
 
-    if (spectrum_has_nan(spectrum_target, len_target)) {
+    if (spectrum_has_nan<T>(spectrum_target, len_target)) {
         return std::vector<double>(4, std::nan(""));
     }
 
-    ObjectiveData obj_data{
+    ObjectiveData<T> obj_data{
         lut_reflectances, n_lut_bands, n_lut_solar_angles, n_lut_dust_concentrations, n_lut_grain_sizes,
         spectrum_background, len_background,
         spectrum_target, len_target,
@@ -645,7 +755,7 @@ std::vector<double> invert(double* spectrum_background, int len_background,
         //  - xtol_abs of 1e-3 in z corresponds to ~0.05% movement in any
         //    fraction or bounded var. Tighter than the constrained path's
         //    xtol_rel=1e-2 because BOBYQA otherwise stops prematurely.
-        opt.set_min_objective(spectrum_difference_softmax_wrapper, &obj_data);
+        opt.set_min_objective(spectrum_difference_softmax_wrapper<T>, &obj_data);
         opt.set_maxeval(max_eval);
         opt.set_ftol_abs(1e-6);
         opt.set_xtol_abs(1e-3);
@@ -669,7 +779,7 @@ std::vector<double> invert(double* spectrum_background, int len_background,
         //
         // Initial step: z-space scale (~0.5) for fractions, physical units
         // (~100) for dust/grain — matches COBYLA's rhobeg on the latter two.
-        opt.set_min_objective(spectrum_difference_hybrid_wrapper, &obj_data);
+        opt.set_min_objective(spectrum_difference_hybrid_wrapper<T>, &obj_data);
         opt.set_maxeval(max_eval);
         opt.set_ftol_abs(1e-4);
         opt.set_xtol_rel(1e-2);
@@ -691,7 +801,7 @@ std::vector<double> invert(double* spectrum_background, int len_background,
     if (constrained_algorithm) {
         opt.add_inequality_constraint(constraint, &obj_data);
     }
-    opt.set_min_objective(spectrum_difference_wrapper, &obj_data);
+    opt.set_min_objective(spectrum_difference_wrapper<T>, &obj_data);
     opt.set_maxeval(max_eval);
 
     std::vector<double> lower_bounds = {0.0, 0.0, min_dust_concentration, min_grain_size};
@@ -709,22 +819,52 @@ std::vector<double> invert(double* spectrum_background, int len_background,
 }
 
 
-void invert_array1d(double* spectra_backgrounds, int n_obs_backgrounds, int n_bands_backgrounds,
-                    double* spectra_targets, int n_obs_target, int n_bands_target,
+// Public float32-storage entry (SWIG-exposed). Imagery spectra + LUT are stored
+// as float32 and promoted to double at read time; the optimizer runs in double.
+std::vector<double> invert(float* spectrum_background, int len_background,
+                           float* spectrum_target, int len_target,
+                           double* spectrum_shade, int len_shade,
+                           double solar_angle,
+                           double* lut_bands, int len_lut_bands,
+                           double* lut_solar_angles, int len_lut_solar_angles,
+                           double* lut_dust_concentrations, int len_lut_dust_concentrations,
+                           double* lut_grain_sizes, int len_lut_grain_sizes,
+                           float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
+                           int max_eval,
+                           std::vector<double> x0,
+                           int algorithm) {
+    return invert_impl<float>(spectrum_background, len_background,
+                               spectrum_target, len_target,
+                               spectrum_shade, len_shade,
+                               solar_angle,
+                               lut_bands, len_lut_bands,
+                               lut_solar_angles, len_lut_solar_angles,
+                               lut_dust_concentrations, len_lut_dust_concentrations,
+                               lut_grain_sizes, len_lut_grain_sizes,
+                               lut_reflectances, n_lut_bands, n_lut_solar_angles, n_lut_dust_concentrations, n_lut_grain_sizes,
+                               max_eval, x0, algorithm);
+}
+
+
+// Templated 1D-batch inversion. The public `invert_array1d` (float storage)
+// delegates here with T=float; `invert_impl<double>` still serves single pixels.
+template<typename T>
+void invert_array1d_impl(const T* spectra_backgrounds, int n_obs_backgrounds, int n_bands_backgrounds,
+                    const T* spectra_targets, int n_obs_target, int n_bands_target,
                     double* spectrum_shade, int len_shade,
                     double* obs_solar_angles, int n_obs_solar_angles,
                     double* lut_bands, int len_lut_bands,
                     double* lut_solar_angles, int len_lut_solar_angles,
                     double* lut_dust_concentrations, int len_lut_dust_concentrations,
                     double* lut_grain_sizes, int len_lut_grain_sizes,
-                    double* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
+                    const T* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
                     double* results, int n_obs, int n_results,
                     int max_eval,
                     std::vector<double> x0,
                     int algorithm) {
     for (int obs = 0; obs < n_obs_backgrounds; obs++) {
         int n = obs * n_bands_backgrounds;
-        std::vector<double> x = invert(&spectra_backgrounds[n], len_lut_bands,
+        std::vector<double> x = invert_impl<T>(&spectra_backgrounds[n], len_lut_bands,
                                        &spectra_targets[n], len_lut_bands,
                                        spectrum_shade, len_shade,
                                        obs_solar_angles[obs],
@@ -741,15 +881,44 @@ void invert_array1d(double* spectra_backgrounds, int n_obs_backgrounds, int n_ba
 }
 
 
-void invert_array2d(double* spectra_backgrounds, int n_background_y, int n_background_x, int n_bands_backgrounds,
-                    double* spectra_targets, int n_target_y, int n_target_x, int n_bands_target,
+void invert_array1d(float* spectra_backgrounds, int n_obs_backgrounds, int n_bands_backgrounds,
+                    float* spectra_targets, int n_obs_target, int n_bands_target,
+                    double* spectrum_shade, int len_shade,
+                    double* obs_solar_angles, int n_obs_solar_angles,
+                    double* lut_bands, int len_lut_bands,
+                    double* lut_solar_angles, int len_lut_solar_angles,
+                    double* lut_dust_concentrations, int len_lut_dust_concentrations,
+                    double* lut_grain_sizes, int len_lut_grain_sizes,
+                    float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
+                    double* results, int n_obs, int n_results,
+                    int max_eval,
+                    std::vector<double> x0,
+                    int algorithm) {
+    invert_array1d_impl<float>(spectra_backgrounds, n_obs_backgrounds, n_bands_backgrounds,
+                    spectra_targets, n_obs_target, n_bands_target,
+                    spectrum_shade, len_shade,
+                    obs_solar_angles, n_obs_solar_angles,
+                    lut_bands, len_lut_bands,
+                    lut_solar_angles, len_lut_solar_angles,
+                    lut_dust_concentrations, len_lut_dust_concentrations,
+                    lut_grain_sizes, len_lut_grain_sizes,
+                    lut_reflectances, n_lut_bands, n_lut_solar_angles, n_lut_dust_concentrations, n_lut_grain_sizes,
+                    results, n_obs, n_results, max_eval, x0, algorithm);
+}
+
+
+// Templated 2D-batch inversion — the io->inversion workhorse. The public
+// `invert_array2d` (float storage) delegates here with T=float.
+template<typename T>
+void invert_array2d_impl(const T* spectra_backgrounds, int n_background_y, int n_background_x, int n_bands_backgrounds,
+                    const T* spectra_targets, int n_target_y, int n_target_x, int n_bands_target,
                     double* spectrum_shade, int len_shade,
                     double* obs_solar_angles, int n_obs_solar_y, int n_obs_solar_x,
                     double* lut_bands, int len_lut_bands,
                     double* lut_solar_angles, int len_lut_solar_angles,
                     double* lut_dust_concentrations, int len_lut_dust_concentrations,
                     double* lut_grain_sizes, int len_lut_grain_sizes,
-                    double* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
+                    const T* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
                     double* results, int n_y, int n_x, int n_results,
                     int max_eval,
                     std::vector<double> x0,
@@ -758,7 +927,7 @@ void invert_array2d(double* spectra_backgrounds, int n_background_y, int n_backg
         for (int x = 0; x < n_target_x; x++) {
             int obs = x + y * n_target_x;
             int n = obs * n_bands_target;
-            std::vector<double> result = invert(&spectra_backgrounds[n], len_lut_bands,
+            std::vector<double> result = invert_impl<T>(&spectra_backgrounds[n], len_lut_bands,
                                                 &spectra_targets[n], len_lut_bands,
                                                 spectrum_shade, len_shade,
                                                 obs_solar_angles[obs],
@@ -773,4 +942,30 @@ void invert_array2d(double* spectra_backgrounds, int n_background_y, int n_backg
             }
         }
     }
+}
+
+
+void invert_array2d(float* spectra_backgrounds, int n_background_y, int n_background_x, int n_bands_backgrounds,
+                    float* spectra_targets, int n_target_y, int n_target_x, int n_bands_target,
+                    double* spectrum_shade, int len_shade,
+                    double* obs_solar_angles, int n_obs_solar_y, int n_obs_solar_x,
+                    double* lut_bands, int len_lut_bands,
+                    double* lut_solar_angles, int len_lut_solar_angles,
+                    double* lut_dust_concentrations, int len_lut_dust_concentrations,
+                    double* lut_grain_sizes, int len_lut_grain_sizes,
+                    float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
+                    double* results, int n_y, int n_x, int n_results,
+                    int max_eval,
+                    std::vector<double> x0,
+                    int algorithm) {
+    invert_array2d_impl<float>(spectra_backgrounds, n_background_y, n_background_x, n_bands_backgrounds,
+                    spectra_targets, n_target_y, n_target_x, n_bands_target,
+                    spectrum_shade, len_shade,
+                    obs_solar_angles, n_obs_solar_y, n_obs_solar_x,
+                    lut_bands, len_lut_bands,
+                    lut_solar_angles, len_lut_solar_angles,
+                    lut_dust_concentrations, len_lut_dust_concentrations,
+                    lut_grain_sizes, len_lut_grain_sizes,
+                    lut_reflectances, n_lut_bands, n_lut_solar_angles, n_lut_dust_concentrations, n_lut_grain_sizes,
+                    results, n_y, n_x, n_results, max_eval, x0, algorithm);
 }
