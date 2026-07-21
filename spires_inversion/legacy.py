@@ -1,18 +1,8 @@
 import numpy as np
 import scipy
-import h5py
 
 
 _scipy_options = {'disp': False, 'iprint': 100, 'maxiter': 1000, 'ftol': 1e-9}
-
-
-def load_lut(lut_file):
-    with h5py.File(lut_file, 'r') as lut:
-        d = {}
-        for k in lut.keys():
-            d[k] = np.squeeze(np.array(lut.get(k)))
-    f = scipy.interpolate.RegularGridInterpolator(points=[d['X4'], d['X3'], d['X2'], d['X1']], values=d['X'])
-    return f
 
 
 def speedy_invert(f, spectrum_target, spectrum_background,
@@ -54,15 +44,18 @@ def speedy_invert(f, spectrum_target, spectrum_background,
 
     Examples
     --------
-    >>> import spires_inversion  # doctest: +SKIP
+    >>> import spires_inversion
     >>> import numpy as np
-    >>> f = spires_inversion.legacy.load_lut('tests/data/LUT_MODIS.mat')  # doctest: +SKIP
-    >>> R = np.array([0.8203,0.6796,0.8076,0.8361,0.1879,0.0321,0.0144])  # doctest: +SKIP
-    >>> R0 = np.array([0.2219,0.2681,0.1016,0.1787,0.3097,0.2997,0.2970])  # doctest: +SKIP
-    >>> solar_z = 24.0  # doctest: +SKIP
-    >>> shade = np.zeros(len(R))  # doctest: +SKIP
-    >>> res, model_refl = spires_inversion.legacy.speedy_invert(f, R, R0, solar_z, shade, mode=4)  # doctest: +SKIP
-    >>> np.allclose(res.x, np.array([0.8848, 0.0485, 430.2819, 18.2311]), rtol=1e-2)  # doctest: +SKIP
+    >>> interpolator = spires_inversion.interpolator.LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
+    >>> interpolator.make_scipy_interpolator_legacy()
+    >>> f = interpolator.interpolator_scipy
+    >>> R = np.array([0.3424,0.366,0.3624,0.38932347,0.41624767,0.39567757,0.07043362,0.06267947,0.3792])
+    >>> R0 = np.array([0.0182,0.0265,0.0283,0.056067,0.095432,0.12036866,0.12491679,0.07888655,0.1406])
+    >>> shade = np.zeros(len(R))
+    >>> res, model_refl = spires_inversion.legacy.speedy_invert(f, R, R0, 24.0, shade, mode=3)
+    >>> res.x.shape
+    (4,)
+    >>> bool(0 <= res.x[0] <= 1)  # fsca in [0, 1]
     True
     """
 

@@ -108,9 +108,6 @@ curl -L -o lut_HLSS30_b1to13_3um_dust.mat https://zenodo.org/records/18701286/fi
 curl -L -o lut_modis_b1to7_3um_dust.mat https://zenodo.org/records/18701286/files/lut_modis_b1to7_3um_dust.mat
 curl -L -o lut_oli_b1to7_3um_dust.mat https://zenodo.org/records/18701286/files/lut_oli_b1to7_3um_dust.mat
 
-# Download legacy MODIS LUT (if needed for compatibility tests)
-curl -L -o LUT_MODIS.mat https://zenodo.org/records/18701286/files/LUT_MODIS.mat
-
 # Download full test imagery (large!)
 curl -L -o sentinel_r.nc https://zenodo.org/records/18704072/files/sentinel_r.nc
 curl -L -o sentinel_r0.nc https://zenodo.org/records/18704072/files/sentinel_r0.nc
@@ -132,7 +129,6 @@ GitHub Actions:
 - All lookup tables (Sentinel-2, MODIS, OLI, HLS) are available via Git LFS
 - Uses subset imagery files by default (fast tests)
 - Downloads `lut_sentinel2b_b2to12_3um_dust.mat` from Zenodo to avoid LFS quota
-- Skips tests requiring legacy LUT_MODIS.mat format
 - Full-resolution imagery can be downloaded from Zenodo if needed
 
 GitLab CI:

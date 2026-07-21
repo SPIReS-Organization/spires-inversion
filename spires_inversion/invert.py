@@ -147,9 +147,13 @@ def speedy_invert(spectrum_target, spectrum_background, solar_angle, spectrum_sh
     >>> spectrum_background = np.array([0.0182,0.0265,0.0283,0.056067,0.095432,0.12036866,0.12491679,0.07888655,0.1406])
     >>> solar_angle = 55.73733298
     >>> interpolator = spires_inversion.interpolator.LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
-    >>> spires_inversion.speedy_invert(spectrum_target=spectrum_target, spectrum_background=spectrum_background,
-    ...                      solar_angle=solar_angle, interpolator=interpolator, algorithm=1)  # doctest: +SKIP
-    (0.4089303296055291, 0.155201675059351, 138.79357872804923, 364.58404302094834)
+    >>> fsca, fshade, dust, grain = spires_inversion.speedy_invert(
+    ...     spectrum_target=spectrum_target, spectrum_background=spectrum_background,
+    ...     solar_angle=solar_angle, interpolator=interpolator, algorithm=1)
+    >>> 0 <= fsca <= 1 and 0 <= fshade <= 1 and fsca + fshade <= 1.000001
+    True
+    >>> bool(dust >= 0) and grain > 0
+    True
     """
 
     if spectrum_shade is None:
@@ -266,10 +270,13 @@ def speedy_invert_array1d(spectra_targets, spectra_backgrounds, obs_solar_angles
     ...                                dtype=np.float32)
     >>> obs_solar_angles = np.array([55.73733298, 55.83733298])
     >>> interpolator = spires_inversion.interpolator.LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
-    >>> spires_inversion.speedy_invert_array1d(spectra_targets=spectra_targets, spectra_backgrounds=spectra_backgrounds,
-    ...                            obs_solar_angles=obs_solar_angles, interpolator=interpolator, algorithm=1)  # doctest: +SKIP
-    array([[4.08930318e-01, 1.55201682e-01, 1.38793589e+02, 3.64584037e+02],
-           [2.63873314e-01, 1.83226573e-01, 1.94343259e+02, 3.80170965e+02]])
+    >>> results = spires_inversion.speedy_invert_array1d(spectra_targets=spectra_targets,
+    ...     spectra_backgrounds=spectra_backgrounds, obs_solar_angles=obs_solar_angles,
+    ...     interpolator=interpolator, algorithm=1)
+    >>> results.shape
+    (2, 4)
+    >>> bool(np.all((results[:, 0] >= 0) & (results[:, 0] <= 1)))  # fsca in [0, 1]
+    True
     """
     if spectrum_shade is None:
         spectrum_shade = np.zeros_like(spectra_targets[0])
@@ -842,8 +849,10 @@ def speedy_invert_scipy(interpolator: spires_inversion.interpolator.LutInterpola
     ...                                              spectrum_background=spectrum_background,
     ...                                              solar_angle=solar_angle,
     ...                                              mode=3, method='SLSQP')
-    >>> res.x  # doctest: +SKIP
-    array([4.36429085e-01, 5.63570915e-01, 9.91000000e+02, 4.12331162e+01])
+    >>> res.x.shape
+    (4,)
+    >>> bool(0 <= res.x[0] <= 1)  # fsca in [0, 1]
+    True
     """
 
     bounds_fsca = [0, 1]
