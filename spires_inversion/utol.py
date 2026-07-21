@@ -85,8 +85,8 @@ def uniquetol_1d(array, tol=1e-3):
     ...                   [0.3228, 0.346 , 0.3272],
     ...                   [0.3067, 0.3163, 0.3162],
     ...                   [0.3068, 0.3164, 0.3164]])
-    >>> unique, labels = spires_inversion.utol.uniquetol_1d(array, tol=1e-2)  # doctest: +SKIP
-    >>> labels  # doctest: +SKIP
+    >>> unique, labels = spires_inversion.utol.uniquetol_1d(array, tol=1e-2)
+    >>> labels
     array([2, 0, 1, 3, 3])
     """
 
@@ -105,8 +105,11 @@ def uniquetol_1d(array, tol=1e-3):
     # Generate labels for the unique vectors based on their index in the unique_rows array
     labels = np.arange(len(unique_vectors))
 
-    # Assign labels to the original array using inverse indices
-    labels = labels[inverse_indices]
+    # Assign labels to the original array using inverse indices. ravel() keeps
+    # labels 1-D as documented: NumPy 2.0 changed np.unique(return_inverse=True)
+    # to return a column-shaped inverse index, which would otherwise make labels
+    # (n, 1) instead of (n,).
+    labels = labels[inverse_indices].ravel()
 
     return unique_vectors, labels
 

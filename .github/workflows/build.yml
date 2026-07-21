@@ -41,8 +41,6 @@ jobs:
           https://zenodo.org/records/18701286/files/lut_sentinel2b_b2to12_3um_dust.mat
 
         echo "✓ Sentinel-2 LUT downloaded"
-        echo "Note: Original LUT_MODIS.mat not available on Zenodo (different structure)"
-        echo "      test_legacy.py will be skipped"
 
     - name: Download large test data (optional)
       run: |
@@ -83,9 +81,7 @@ jobs:
     - name: Run tests
       shell: bash -l {0}
       run: |
-        # Skip test_legacy.py - requires original LUT_MODIS.mat not on Zenodo
-        # The Zenodo dataset has lut_modis_b1to7_3um_dust.mat with different structure
-        pytest -v --ignore=tests/test_legacy.py
+        pytest -v
 
     - name: Test import and version
       shell: bash -l {0}

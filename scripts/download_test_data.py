@@ -21,11 +21,6 @@ from pathlib import Path
 # Zenodo download URLs
 ZENODO_FILES = {
     'luts': {
-        'LUT_MODIS.mat': {
-            'url': 'https://zenodo.org/records/18701286/files/LUT_MODIS.mat',
-            'size_mb': 537,
-            'doi': '10.5281/zenodo.18701286'
-        },
         'lut_sentinel2b_b2to12_3um_dust.mat': {
             'url': 'https://zenodo.org/records/18701286/files/lut_sentinel2b_b2to12_3um_dust.mat',
             'size_mb': 70,
@@ -95,7 +90,7 @@ Examples:
     python scripts/download_test_data.py --imagery
 
   Download specific file:
-    python scripts/download_test_data.py --file LUT_MODIS.mat
+    python scripts/download_test_data.py --file lut_sentinel2b_b2to12_3um_dust.mat
 
 For more information, see tests/data/README.md
         """
