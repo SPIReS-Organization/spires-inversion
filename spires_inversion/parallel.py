@@ -5,7 +5,7 @@ from spires_inversion.invert import speedy_invert_array2d
 
 
 _VARIABLE_ATTRS = {
-    'fsca': {
+    'fsnow': {
         'long_name': 'Fractional Snow-Covered Area',
         'units': '1',
         'valid_range': [0, 1],
@@ -15,7 +15,7 @@ _VARIABLE_ATTRS = {
         'units': '1',
         'valid_range': [0, 1],
     },
-    'dust_concentration': {
+    'lap_concentration': {
         'long_name': 'Dust Concentration in Snow',
         'units': 'ppm',
         'valid_range': [0, 10000],
@@ -76,7 +76,7 @@ def _make_invert_chunk(max_eval, x0, algorithm):
         common = dict(
             bands=bands,
             solar_angles=solar_angles,
-            dust_concentrations=dust,
+            lap_concentrations=dust,
             grain_sizes=grain,
             reflectances=reflectances,
             max_eval=max_eval,
@@ -107,7 +107,7 @@ def _make_invert_chunk(max_eval, x0, algorithm):
 
 def _to_dataset(results):
     ds = results.to_dataset(dim='property').rename({
-        0: 'fsca', 1: 'fshade', 2: 'dust_concentration', 3: 'grain_size',
+        0: 'fsnow', 1: 'fshade', 2: 'lap_concentration', 3: 'grain_size',
     })
     for name, attrs in _VARIABLE_ATTRS.items():
         ds[name].attrs = attrs
@@ -127,16 +127,16 @@ def encode_results(ds, fill_value=-1, fsca_scale=100, fshade_scale=100,
     Parameters
     ----------
     ds : xarray.Dataset
-        Output of ``speedy_invert_dask`` with variables ``fsca``, ``fshade``,
-        ``dust_concentration``, ``grain_size`` in physical units (NaN for nodata).
+        Output of ``speedy_invert_dask`` with variables ``fsnow``, ``fshade``,
+        ``lap_concentration``, ``grain_size`` in physical units (NaN for nodata).
     fill_value : int, optional
         Sentinel for NaN pixels (default: -1).
     fsca_scale, fshade_scale : float, optional
         Multiplier applied before integer cast (default: 100, i.e. percent).
     fraction_dtype : numpy dtype, optional
-        Integer type for fsca/fshade (default: ``np.int8``).
+        Integer type for fsnow/fshade (default: ``np.int8``).
     concentration_dtype : numpy dtype, optional
-        Integer type for dust_concentration/grain_size (default: ``np.int16``).
+        Integer type for lap_concentration/grain_size (default: ``np.int16``).
 
     Returns
     -------
@@ -147,9 +147,9 @@ def encode_results(ds, fill_value=-1, fsca_scale=100, fshade_scale=100,
 
     encoded = ds.copy()
     scales = {
-        'fsca': (fsca_scale, fraction_dtype),
+        'fsnow': (fsca_scale, fraction_dtype),
         'fshade': (fshade_scale, fraction_dtype),
-        'dust_concentration': (1, concentration_dtype),
+        'lap_concentration': (1, concentration_dtype),
         'grain_size': (1, concentration_dtype),
     }
     for name, (scale, dtype) in scales.items():
@@ -199,7 +199,7 @@ def speedy_invert_dask(spectra_targets, spectra_backgrounds, obs_solar_angles,
     max_eval : int, optional
         Maximum optimization iterations per pixel (default: 100).
     x0 : array-like, optional
-        Initial guess: [fsca, fshade, dust_conc (ppm), grain_size (μm)].
+        Initial guess: [fsnow, fshade, dust_conc (ppm), grain_size (μm)].
     algorithm : int, optional
         NLopt algorithm code (see speedy_invert_array2d).
     client : dask.distributed.Client, optional
@@ -217,7 +217,7 @@ def speedy_invert_dask(spectra_targets, spectra_backgrounds, obs_solar_angles,
     Returns
     -------
     xarray.Dataset
-        Dataset with variables fsca, fshade, dust_concentration, grain_size,
+        Dataset with variables fsnow, fshade, lap_concentration, grain_size,
         preserving input coordinates and dimensions.
 
     See Also
@@ -244,14 +244,14 @@ def speedy_invert_dask(spectra_targets, spectra_backgrounds, obs_solar_angles,
         obs_solar_angles,
         interpolator.bands,
         interpolator.solar_angles,
-        interpolator.dust_concentrations,
+        interpolator.lap_concentrations,
         interpolator.grain_sizes,
         reflectances,
         dask='parallelized',
         input_core_dims=[
             ['band'], ['band'], [],
-            ['bands'], ['sz'], ['dust'], ['grain'],
-            ['bands', 'sz', 'dust', 'grain'],
+            ['bands'], ['sz'], ['lap'], ['grain'],
+            ['bands', 'sz', 'lap', 'grain'],
         ],
         output_core_dims=[['property']],
         output_dtypes=[np.float32],

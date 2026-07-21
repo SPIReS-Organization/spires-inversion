@@ -73,9 +73,9 @@ def test_nlop_cobyla():
     # optimizer coordinates: COBYLA is derivative-free and float32 LUT storage
     # nudges the simplex to a different local optimum on this flat objective (a
     # few percent), the same cross-platform drift the README documents.
-    fsca, fshade, dust, grain = res
-    assert 0 <= fsca <= 1 and 0 <= fshade <= 1 and fsca + fshade <= 1 + 1e-6
-    assert interpolator.dust_concentrations.min() <= dust <= interpolator.dust_concentrations.max()
+    fsnow, fshade, dust, grain = res
+    assert 0 <= fsnow <= 1 and 0 <= fshade <= 1 and fsnow + fshade <= 1 + 1e-6
+    assert interpolator.lap_concentrations.min() <= dust <= interpolator.lap_concentrations.max()
     assert interpolator.grain_sizes.min() <= grain <= interpolator.grain_sizes.max()
     residual = spires_inversion.snow_diff_4(
         res, spectrum_target, spectrum_background, solar_angle, interpolator,
@@ -93,9 +93,9 @@ def test_nlop_neldermead():
     # Physical plausibility + residual, not pinned coordinates (see
     # test_nlop_cobyla). algorithm=2 is unconstrained Nelder-Mead, so f_shade may
     # be near-zero but fractions stay in range.
-    fsca, fshade, dust, grain = res
-    assert 0 <= fsca <= 1 and 0 <= fshade <= 1
-    assert interpolator.dust_concentrations.min() <= dust <= interpolator.dust_concentrations.max()
+    fsnow, fshade, dust, grain = res
+    assert 0 <= fsnow <= 1 and 0 <= fshade <= 1
+    assert interpolator.lap_concentrations.min() <= dust <= interpolator.lap_concentrations.max()
     assert interpolator.grain_sizes.min() <= grain <= interpolator.grain_sizes.max()
     residual = spires_inversion.snow_diff_4(
         res, spectrum_target, spectrum_background, solar_angle, interpolator,

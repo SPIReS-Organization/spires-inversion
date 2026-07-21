@@ -8,7 +8,7 @@ _scipy_options = {'disp': False, 'iprint': 100, 'maxiter': 1000, 'ftol': 1e-9}
 def speedy_invert(f, spectrum_target, spectrum_background,
                  solar_angle, shade, mode=3, scipy_options=_scipy_options, method='SLSQP'):
     """
-    Inverts a spectrum and determines f_sca, f_shade, dust_concentration and grain_size.
+    Inverts a spectrum and determines f_snow, f_shade, lap_concentration and grain_size.
 
     Parameters
     ----------
@@ -24,9 +24,9 @@ def speedy_invert(f, spectrum_target, spectrum_background,
     shade: np.ndarray
         ideal shade endmember
     mode: int
-        3 or 4 variable inversion. 4 = full model (1-fsca, 2-fshade,
-        fother(1-fsca-fshade), 3-grain radius, 4-dust).
-        3 = simplified model (1-fsca, fshade (1-fsca), 2-grain radius, 3-dust).
+        3 or 4 variable inversion. 4 = full model (1-fsnow, 2-fshade,
+        fother(1-fsnow-fshade), 3-grain radius, 4-dust).
+        3 = simplified model (1-fsnow, fshade (1-fsnow), 2-grain radius, 3-dust).
     scipy_options: dict
         Dictionary of options to pass to scipy.optimize.minimize()
         (https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html
@@ -38,7 +38,7 @@ def speedy_invert(f, spectrum_target, spectrum_background,
     res: scipy.optimize.OptimizeResult
         see scipy.optimize.OptimizeResult documentation.
         res.x contains the solution of the optimization problem with
-        x[0]=f_sca, x[1]=f_shade, x[2]=dust_concentration, x[3]=grain_size.
+        x[0]=f_snow, x[1]=f_shade, x[2]=lap_concentration, x[3]=grain_size.
     model_ref: numpy.array
         the optimized modelled reflectance
 
@@ -55,18 +55,18 @@ def speedy_invert(f, spectrum_target, spectrum_background,
     >>> res, model_refl = spires_inversion.legacy.speedy_invert(f, R, R0, 24.0, shade, mode=3)
     >>> res.x.shape
     (4,)
-    >>> bool(0 <= res.x[0] <= 1)  # fsca in [0, 1]
+    >>> bool(0 <= res.x[0] <= 1)  # fsnow in [0, 1]
     True
     """
 
-    # bounds: fsca, fshade, grain size, dust (note: order for grain radius and dust is switched from F)
-    bounds_fsca = [0, 1]
+    # bounds: fsnow, fshade, grain size, dust (note: order for grain radius and dust is switched from F)
+    bounds_fsnow = [0, 1]
     bounds_fshade = [0, 1]
-    bounds_dust = [f.grid[2].min(), f.grid[2].max()]
+    bounds_lap = [f.grid[2].min(), f.grid[2].max()]
     bounds_grain = [f.grid[3].min(), f.grid[3].max()]
-    bounds = np.array([bounds_fsca, bounds_fshade, bounds_grain, bounds_dust])
+    bounds = np.array([bounds_fsnow, bounds_fshade, bounds_grain, bounds_lap])
 
-    # initial guesses for fsca, fshade,dust, & grain size
+    # initial guesses for fsnow, fshade,dust, & grain size
     x0 = [0.5, 0.05, 10, 250]
 
     # model reflectance pre-allocation
@@ -79,9 +79,9 @@ def speedy_invert(f, spectrum_target, spectrum_background,
         Parameters
         ----------
         x: np.array
-            - x[0] f_sca
+            - x[0] f_snow
             - x[1] f_shade
-            - x[2] dust_concentration
+            - x[2] lap_concentration
             - x[3] grain_radius
 
         Returns
@@ -93,8 +93,8 @@ def speedy_invert(f, spectrum_target, spectrum_background,
         # nonlocal vars from parent function
         nonlocal model_reflectances, mode
 
-        # mode - 4 variable solution (1-fsca,2-fshade,fother(1-fsca-fshade),3-grain radius,4-dust)
-        # mode - 3 variable solution (1-fsca,fshade (1-fsca),2-grain radius,3-dust)
+        # mode - 4 variable solution (1-fsnow,2-fshade,fother(1-fsnow-fshade),3-grain radius,4-dust)
+        # mode - 3 variable solution (1-fsnow,fshade (1-fsnow),2-grain radius,3-dust)
 
         # fill in model_reflectances for each band for snow properties ie if pixel were pure snow (no fshade, no fother)
         if mode == 4:
@@ -107,7 +107,7 @@ def speedy_invert(f, spectrum_target, spectrum_background,
                     interpolated_reflectance = interpolated_reflectance[0]
                 model_reflectances[i] = interpolated_reflectance
             # now adjust model reflectance for a mixed pixel, with x[0] and x[1]
-            # as fsca, fshade, and 1-x[0]-x[1] as fother
+            # as fsnow, fshade, and 1-x[0]-x[1] as fother
             model_reflectances = model_reflectances * x[0] + shade * x[1] + spectrum_background * (1 - x[0] - x[1])
 
         if mode == 3:
@@ -126,7 +126,7 @@ def speedy_invert(f, spectrum_target, spectrum_background,
     # inequality: constraint is => 0
     constraints = [{"type": "ineq", "fun": lambda x: 1 - x[0] + x[1]}]
     #  1-(x[0]+x[1]) >= 0 <-> 1 >= x[0]+x[1]
-    #  mixed pixel contraint: 1 >= fsca+fshade <-> 1 = fsca+fshade+(1-fsca)
+    #  mixed pixel contraint: 1 >= fsnow+fshade <-> 1 = fsnow+fshade+(1-fsnow)
 
     # rranges=(slice(0,1,0.1),slice(0,1,0.1),slice(30,1200,30),slice(0,1000,50))
     # resBrute = brute(SnowDiff, rranges, full_output=False, disp=False, finish=None)
@@ -146,7 +146,7 @@ def speedy_invert(f, spectrum_target, spectrum_background,
     # store modeled refl
     model_refl = np.copy(model_reflectances)
 
-    # if fsca is within 2 pct, use 3 variable solution
+    # if fsnow is within 2 pct, use 3 variable solution
     # error will be higher, but 4 parameter solution likely overfits
     # if (abs(res1.x[0]-res2.x[0]) < 0.02):
     #     choice=3

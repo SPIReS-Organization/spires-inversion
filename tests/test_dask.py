@@ -49,7 +49,7 @@ def _make_inputs(ny=2, nx=3, nt=None, chunks=None):
 
 
 def _assert_pixels_match(ds, ny, nx, nt=None):
-    expected_vars = {'fsca', 'fshade', 'dust_concentration', 'grain_size'}
+    expected_vars = {'fsnow', 'fshade', 'lap_concentration', 'grain_size'}
     assert set(ds.data_vars) == expected_vars
 
     if nt is None:
@@ -59,7 +59,7 @@ def _assert_pixels_match(ds, ny, nx, nt=None):
         expected_shape = (nt, ny, nx)
         expected_dims = ('time', 'y', 'x')
 
-    for i, name in enumerate(['fsca', 'fshade', 'dust_concentration', 'grain_size']):
+    for i, name in enumerate(['fsnow', 'fshade', 'lap_concentration', 'grain_size']):
         var = ds[name]
         assert var.shape == expected_shape
         assert tuple(var.dims) == expected_dims
@@ -68,7 +68,7 @@ def _assert_pixels_match(ds, ny, nx, nt=None):
             np.full(expected_shape, expected_per_pixel[i]),
             rtol=1e-4)
 
-    for name in ['fsca', 'fshade', 'dust_concentration', 'grain_size']:
+    for name in ['fsnow', 'fshade', 'lap_concentration', 'grain_size']:
         assert ds[name].attrs.get('long_name')
 
 
