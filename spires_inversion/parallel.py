@@ -6,7 +6,7 @@ from spires_inversion.invert import speedy_invert_array2d
 
 _VARIABLE_ATTRS = {
     'fsnow': {
-        'long_name': 'Fractional Snow-Covered Area',
+        'long_name': 'Raw Snow Fraction (pre-fshade/canopy correction)',
         'units': '1',
         'valid_range': [0, 1],
     },
@@ -16,7 +16,7 @@ _VARIABLE_ATTRS = {
         'valid_range': [0, 1],
     },
     'lap_concentration': {
-        'long_name': 'Dust Concentration in Snow',
+        'long_name': 'Light-Absorbing Particle Concentration in Snow',
         'units': 'ppm',
         'valid_range': [0, 10000],
     },
@@ -72,11 +72,11 @@ def _make_invert_chunk(max_eval, x0, algorithm):
     apply_ufunc may hand to a single chunk.
     """
     def _invert(spectra_targets, spectra_backgrounds, obs_solar_angles,
-                bands, solar_angles, dust, grain, reflectances):
+                bands, solar_angles, lap, grain, reflectances):
         common = dict(
             bands=bands,
             solar_angles=solar_angles,
-            lap_concentrations=dust,
+            lap_concentrations=lap,
             grain_sizes=grain,
             reflectances=reflectances,
             max_eval=max_eval,
@@ -199,7 +199,7 @@ def speedy_invert_dask(spectra_targets, spectra_backgrounds, obs_solar_angles,
     max_eval : int, optional
         Maximum optimization iterations per pixel (default: 100).
     x0 : array-like, optional
-        Initial guess: [fsnow, fshade, dust_conc (ppm), grain_size (μm)].
+        Initial guess: [fsnow, fshade, lap_conc (ppm), grain_size (μm)].
     algorithm : int, optional
         NLopt algorithm code (see speedy_invert_array2d).
     client : dask.distributed.Client, optional

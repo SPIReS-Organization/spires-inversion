@@ -91,7 +91,7 @@ def speedy_invert(spectrum_target, spectrum_background, solar_angle, spectrum_sh
     solar_angles : numpy.ndarray, optional
         Solar angle coordinates of reflectances. Required if interpolator not provided.
     lap_concentrations : numpy.ndarray, optional
-        Dust concentration coordinates of reflectances (ppm). Required if interpolator not provided.
+        LAP concentration coordinates of reflectances (ppm). Required if interpolator not provided.
     grain_sizes : numpy.ndarray, optional
         Grain size coordinates of reflectances (μm). Required if interpolator not provided.
     reflectances : numpy.ndarray, optional
@@ -104,7 +104,7 @@ def speedy_invert(spectrum_target, spectrum_background, solar_angle, spectrum_sh
     max_eval : int, optional
         Maximum number of optimization iterations. Default is 100.
     x0 : array-like, optional
-        Initial guess for [fsnow, fshade, dust_conc, grain_size].
+        Initial guess for [fsnow, fshade, lap_conc, grain_size].
         Default is [0.5, 0.05, 10, 250].
     algorithm : int, optional
         Optimization algorithm to use (default: 2).
@@ -114,7 +114,7 @@ def speedy_invert(spectrum_target, spectrum_background, solar_angle, spectrum_sh
         4 = LN_NELDERMEAD on softmax-reparameterized cost (full softmax),
         5 = LN_BOBYQA on softmax-reparameterized cost (quadratic-model variant),
         6 = LN_NELDERMEAD on hybrid: softmax for fractions, clip-on-entry for
-            dust/grain (recommended for real imagery).
+            LAP/grain (recommended for real imagery).
         Algorithms 4-6 absorb the simplex (f_snow + f_shade + f_bg = 1, all ≥ 0)
         into the parameter transformation, so unconstrained NLopt solvers can
         replace COBYLA. On real imagery the hybrid (algorithm 6) is the
@@ -122,10 +122,10 @@ def speedy_invert(spectrum_target, spectrum_background, solar_angle, spectrum_sh
         and speed (~2.6× faster) and stays stable as `max_eval` is raised.
 
         Note: algorithms 4 and 5 (full softmax) suffer grain-bound saturation
-        at high `max_eval` — the sigmoid reparameterization on dust/grain is
+        at high `max_eval` — the sigmoid reparameterization on LAP/grain is
         asymptotically flat near the LUT bounds, letting the optimizer drift
         toward the upper bound while still lowering the residual. Algorithm 6
-        does not have this problem because dust/grain stay in physical units
+        does not have this problem because LAP/grain stay in physical units
         with a clip in the objective, turning the bound into a true wall. See
         the "Softmax algorithms and grain-bound saturation" note in the README.
 
@@ -136,7 +136,7 @@ def speedy_invert(spectrum_target, spectrum_background, solar_angle, spectrum_sh
 
         - fsnow : float - Fractional snow-covered area (0-1)
         - fshade : float - Fractional shaded area (0-1)
-        - lap_concentration : float - Dust concentration in snow (ppm)
+        - lap_concentration : float - LAP concentration in snow (ppm)
         - grain_size : float - Effective snow grain radius (μm)
 
     Examples
@@ -147,12 +147,12 @@ def speedy_invert(spectrum_target, spectrum_background, solar_angle, spectrum_sh
     >>> spectrum_background = np.array([0.0182,0.0265,0.0283,0.056067,0.095432,0.12036866,0.12491679,0.07888655,0.1406])
     >>> solar_angle = 55.73733298
     >>> interpolator = spires_inversion.interpolator.LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
-    >>> fsnow, fshade, dust, grain = spires_inversion.speedy_invert(
+    >>> fsnow, fshade, lap, grain = spires_inversion.speedy_invert(
     ...     spectrum_target=spectrum_target, spectrum_background=spectrum_background,
     ...     solar_angle=solar_angle, interpolator=interpolator, algorithm=1)
     >>> 0 <= fsnow <= 1 and 0 <= fshade <= 1 and fsnow + fshade <= 1.000001
     True
-    >>> bool(dust >= 0) and grain > 0
+    >>> bool(lap >= 0) and grain > 0
     True
     """
 
@@ -211,7 +211,7 @@ def speedy_invert_array1d(spectra_targets, spectra_backgrounds, obs_solar_angles
     solar_angles : numpy.ndarray, optional
         Solar angle coordinates of reflectances. Required if interpolator not provided.
     lap_concentrations : numpy.ndarray, optional
-        Dust concentration coordinates of reflectances (ppm). Required if interpolator not provided.
+        LAP concentration coordinates of reflectances (ppm). Required if interpolator not provided.
     grain_sizes : numpy.ndarray, optional
         Grain size coordinates of reflectances (μm). Required if interpolator not provided.
     reflectances : numpy.ndarray, optional
@@ -224,7 +224,7 @@ def speedy_invert_array1d(spectra_targets, spectra_backgrounds, obs_solar_angles
     max_eval : int, optional
         Maximum number of optimization iterations per observation (default: 100).
     x0 : array-like, optional
-        Initial guess for [fsnow, fshade, dust_conc, grain_size].
+        Initial guess for [fsnow, fshade, lap_conc, grain_size].
         Default is [0.5, 0.05, 10, 250].
     algorithm : int, optional
         Optimization algorithm to use (default: 2).
@@ -234,7 +234,7 @@ def speedy_invert_array1d(spectra_targets, spectra_backgrounds, obs_solar_angles
         4 = LN_NELDERMEAD on softmax-reparameterized cost (full softmax),
         5 = LN_BOBYQA on softmax-reparameterized cost (quadratic-model variant),
         6 = LN_NELDERMEAD on hybrid: softmax for fractions, clip-on-entry for
-            dust/grain (recommended for real imagery).
+            LAP/grain (recommended for real imagery).
         Algorithms 4-6 absorb the simplex (f_snow + f_shade + f_bg = 1, all ≥ 0)
         into the parameter transformation, so unconstrained NLopt solvers can
         replace COBYLA. On real imagery the hybrid (algorithm 6) is the
@@ -242,10 +242,10 @@ def speedy_invert_array1d(spectra_targets, spectra_backgrounds, obs_solar_angles
         and speed (~2.6× faster) and stays stable as `max_eval` is raised.
 
         Note: algorithms 4 and 5 (full softmax) suffer grain-bound saturation
-        at high `max_eval` — the sigmoid reparameterization on dust/grain is
+        at high `max_eval` — the sigmoid reparameterization on LAP/grain is
         asymptotically flat near the LUT bounds, letting the optimizer drift
         toward the upper bound while still lowering the residual. Algorithm 6
-        does not have this problem because dust/grain stay in physical units
+        does not have this problem because LAP/grain stay in physical units
         with a clip in the objective, turning the bound into a true wall. See
         the "Softmax algorithms and grain-bound saturation" note in the README.
 
@@ -255,7 +255,7 @@ def speedy_invert_array1d(spectra_targets, spectra_backgrounds, obs_solar_angles
         2D array of shape (n_observations, 4) containing inversion results:
         - results[:, 0] : Fractional snow-covered area (0-1)
         - results[:, 1] : Fractional shaded area (0-1)
-        - results[:, 2] : Dust concentration in snow (ppm)
+        - results[:, 2] : LAP concentration in snow (ppm)
         - results[:, 3] : Effective snow grain radius (μm)
 
     Examples
@@ -334,7 +334,7 @@ def speedy_invert_array2d(spectra_targets, spectra_backgrounds, obs_solar_angles
     max_eval : int, optional
         Maximum number of optimization iterations per pixel (default: 100).
     x0 : array-like, optional
-        Initial guess for [fsnow, fshade, dust_conc, grain_size].
+        Initial guess for [fsnow, fshade, lap_conc, grain_size].
         Default is [0.5, 0.05, 10, 250].
     algorithm : int, optional
         Optimization algorithm to use (default: 2).
@@ -344,7 +344,7 @@ def speedy_invert_array2d(spectra_targets, spectra_backgrounds, obs_solar_angles
         4 = LN_NELDERMEAD on softmax-reparameterized cost (full softmax),
         5 = LN_BOBYQA on softmax-reparameterized cost (quadratic-model variant),
         6 = LN_NELDERMEAD on hybrid: softmax for fractions, clip-on-entry for
-            dust/grain (recommended for real imagery).
+            LAP/grain (recommended for real imagery).
         Algorithms 4-6 absorb the simplex (f_snow + f_shade + f_bg = 1, all ≥ 0)
         into the parameter transformation, so unconstrained NLopt solvers can
         replace COBYLA. On real imagery the hybrid (algorithm 6) is the
@@ -352,10 +352,10 @@ def speedy_invert_array2d(spectra_targets, spectra_backgrounds, obs_solar_angles
         and speed (~2.6× faster) and stays stable as `max_eval` is raised.
 
         Note: algorithms 4 and 5 (full softmax) suffer grain-bound saturation
-        at high `max_eval` — the sigmoid reparameterization on dust/grain is
+        at high `max_eval` — the sigmoid reparameterization on LAP/grain is
         asymptotically flat near the LUT bounds, letting the optimizer drift
         toward the upper bound while still lowering the residual. Algorithm 6
-        does not have this problem because dust/grain stay in physical units
+        does not have this problem because LAP/grain stay in physical units
         with a clip in the objective, turning the bound into a true wall. See
         the "Softmax algorithms and grain-bound saturation" note in the README.
     bands : numpy.ndarray, optional
@@ -363,7 +363,7 @@ def speedy_invert_array2d(spectra_targets, spectra_backgrounds, obs_solar_angles
     solar_angles : numpy.ndarray, optional
         Solar angle coordinates of reflectances. Required if interpolator not provided.
     lap_concentrations : numpy.ndarray, optional
-        Dust concentration coordinates of reflectances (ppm). Required if interpolator not provided.
+        LAP concentration coordinates of reflectances (ppm). Required if interpolator not provided.
     grain_sizes : numpy.ndarray, optional
         Grain size coordinates of reflectances (μm). Required if interpolator not provided.
     reflectances : numpy.ndarray, optional
@@ -378,7 +378,7 @@ def speedy_invert_array2d(spectra_targets, spectra_backgrounds, obs_solar_angles
         3D array of shape (ny, nx, 4) containing inversion results:
         - results[:, :, 0] : Fractional snow-covered area (0-1)
         - results[:, :, 1] : Fractional shaded area (0-1)
-        - results[:, :, 2] : Dust concentration in snow (ppm)
+        - results[:, :, 2] : LAP concentration in snow (ppm)
         - results[:, :, 3] : Effective snow grain radius (μm)
 
     Notes
@@ -448,7 +448,7 @@ def speedy_invert_xarray(spectra_targets, spectra_backgrounds, obs_solar_angles,
     max_eval : int, optional
         Maximum number of optimization iterations per pixel (default: 100).
     x0 : array-like, optional
-        Initial guess for [fsnow, fshade, dust_conc, grain_size].
+        Initial guess for [fsnow, fshade, lap_conc, grain_size].
         Default is [0.5, 0.05, 10, 250].
     algorithm : int, optional
         Optimization algorithm to use (default: 2).
@@ -458,7 +458,7 @@ def speedy_invert_xarray(spectra_targets, spectra_backgrounds, obs_solar_angles,
         4 = LN_NELDERMEAD on softmax-reparameterized cost (full softmax),
         5 = LN_BOBYQA on softmax-reparameterized cost (quadratic-model variant),
         6 = LN_NELDERMEAD on hybrid: softmax for fractions, clip-on-entry for
-            dust/grain (recommended for real imagery).
+            LAP/grain (recommended for real imagery).
         Algorithms 4-6 absorb the simplex (f_snow + f_shade + f_bg = 1, all ≥ 0)
         into the parameter transformation, so unconstrained NLopt solvers can
         replace COBYLA. On real imagery the hybrid (algorithm 6) is the
@@ -466,10 +466,10 @@ def speedy_invert_xarray(spectra_targets, spectra_backgrounds, obs_solar_angles,
         and speed (~2.6× faster) and stays stable as `max_eval` is raised.
 
         Note: algorithms 4 and 5 (full softmax) suffer grain-bound saturation
-        at high `max_eval` — the sigmoid reparameterization on dust/grain is
+        at high `max_eval` — the sigmoid reparameterization on LAP/grain is
         asymptotically flat near the LUT bounds, letting the optimizer drift
         toward the upper bound while still lowering the residual. Algorithm 6
-        does not have this problem because dust/grain stay in physical units
+        does not have this problem because LAP/grain stay in physical units
         with a clip in the objective, turning the bound into a true wall. See
         the "Softmax algorithms and grain-bound saturation" note in the README.
 
@@ -479,7 +479,7 @@ def speedy_invert_xarray(spectra_targets, spectra_backgrounds, obs_solar_angles,
         3D array of shape (ny, nx, 4) containing inversion results:
         - results[:, :, 0] : Fractional snow-covered area (0-1)
         - results[:, :, 1] : Fractional shaded area (0-1)
-        - results[:, :, 2] : Dust concentration in snow (ppm)
+        - results[:, :, 2] : LAP concentration in snow (ppm)
         - results[:, :, 3] : Effective snow grain radius (μm)
 
     Notes
@@ -552,7 +552,7 @@ def snow_diff_4(x, spectrum_target, spectrum_background, solar_angle, interpolat
         Model parameters:
         - x[0] : f_snow - Fractional snow-covered area (0-1)
         - x[1] : f_shade - Fractional shaded area (0-1)
-        - x[2] : lap_concentration - Dust concentration in snow (ppm)
+        - x[2] : lap_concentration - LAP concentration in snow (ppm)
         - x[3] : grain_size - Effective snow grain radius (μm)
     spectrum_target : numpy.ndarray
         The observed mixed spectrum to match.
@@ -583,7 +583,7 @@ def snow_diff_4(x, spectrum_target, spectrum_background, solar_angle, interpolat
     >>> interpolator = spires_inversion.interpolator.LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
     >>> f_snow = 0.482
     >>> f_shade = 0.065
-    >>> lap_concentration = 100  # ppm (within the LUT dust range 0-991)
+    >>> lap_concentration = 100  # ppm (within the LUT LAP range 0-991)
     >>> grain_size = 220  # μm
     >>> solar_angle = 55.73733298
     >>> x = [f_snow, f_shade, lap_concentration, grain_size]
@@ -623,7 +623,7 @@ def snow_diff_3(x, spectrum_target, solar_angle, interpolator, shade):
     x : array-like
         Model parameters (note: only first 3 are used):
         - x[0] : f_snow - Fractional snow-covered area (0-1)
-        - x[1] : lap_concentration - Dust concentration in snow (ppm)
+        - x[1] : lap_concentration - LAP concentration in snow (ppm)
         - x[2] : grain_size - Effective snow grain radius (μm)
     spectrum_target : numpy.ndarray
         The observed mixed spectrum to match.
@@ -651,7 +651,7 @@ def snow_diff_3(x, spectrum_target, solar_angle, interpolator, shade):
     >>> import numpy as np
     >>> interpolator = spires_inversion.interpolator.LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
     >>> f_snow = 0.482
-    >>> lap_concentration = 100  # ppm (within the LUT dust range 0-991)
+    >>> lap_concentration = 100  # ppm (within the LUT LAP range 0-991)
     >>> grain_size = 220  # μm
     >>> solar_angle = 55.73733298
     >>> x = [f_snow, lap_concentration, grain_size]
@@ -673,7 +673,7 @@ def snow_diff_3(x, spectrum_target, solar_angle, interpolator, shade):
 
 def _x_to_z(x, lap_min, lap_max, grain_min, grain_max, eps=1e-6):
     """Inverse of the softmax/sigmoid reparameterization. Used to seed z0 from a
-    physical x0 = [f_snow, f_shade, dust, grain]."""
+    physical x0 = [f_snow, f_shade, lap, grain]."""
     f_snow = float(np.clip(x[0], eps, 1 - eps))
     f_shade = float(np.clip(x[1], eps, 1 - eps))
     f_bg = float(np.clip(1.0 - f_snow - f_shade, eps, 1 - eps))
@@ -694,7 +694,7 @@ def snow_diff_softmax(z, spectrum_target, spectrum_background, solar_angle, inte
 
     Maps an unconstrained vector ``z = [z_snow, z_shade, z_dust, z_grain]`` to physical
     parameters such that the simplex constraints (f_snow, f_shade, f_bg ≥ 0,
-    f_snow + f_shade + f_bg = 1) and the box bounds on dust/grain are satisfied by
+    f_snow + f_shade + f_bg = 1) and the box bounds on LAP/grain are satisfied by
     construction. This lets unconstrained solvers (Nelder-Mead, L-BFGS-B, BFGS) replace
     COBYLA / SLSQP on the fractional sub-problem.
 
@@ -705,7 +705,7 @@ def snow_diff_softmax(z, spectrum_target, spectrum_background, solar_angle, inte
     .. math::
         (f_{sca}, f_{shade}, f_{bg}) = \mathrm{softmax}(z_{snow}, z_{shade}, 0)
 
-    Dust and grain via sigmoid-scaled-to-bounds:
+    LAP and grain via sigmoid-scaled-to-bounds:
 
     .. math::
         d = d_{min} + (d_{max} - d_{min})\,\sigma(z_{dust}),\quad
@@ -716,11 +716,11 @@ def snow_diff_softmax(z, spectrum_target, spectrum_background, solar_angle, inte
     e = np.exp(np.array([z[0], z[1], 0.0]) - max(z[0], z[1], 0.0))
     f_snow, f_shade, f_bg = e / e.sum()
 
-    dust = lap_min + (lap_max - lap_min) / (1.0 + np.exp(-z[2]))
+    lap = lap_min + (lap_max - lap_min) / (1.0 + np.exp(-z[2]))
     grain = grain_min + (grain_max - grain_min) / (1.0 + np.exp(-z[3]))
 
     model_reflectances = interpolator.interpolate_all(solar_angle=solar_angle,
-                                                      lap_concentration=dust,
+                                                      lap_concentration=lap,
                                                       grain_size=grain)
     model_reflectances = model_reflectances * f_snow + shade * f_shade + spectrum_background * f_bg
     return np.linalg.norm(spectrum_target - model_reflectances)
@@ -735,7 +735,7 @@ def speedy_invert_scipy_softmax(interpolator: spires_inversion.interpolator.LutI
     Drops the inequality constraint ``1 - f_snow - f_shade ≥ 0`` and the box bounds by
     optimizing in an unconstrained space (see :func:`snow_diff_softmax`). Returns the
     same ``(res, model_refl)`` shape as :func:`speedy_invert_scipy`, with
-    ``res.x = [f_snow, f_shade, dust, grain]`` in physical units.
+    ``res.x = [f_snow, f_shade, lap, grain]`` in physical units.
 
     Parameters
     ----------
@@ -744,7 +744,7 @@ def speedy_invert_scipy_softmax(interpolator: spires_inversion.interpolator.LutI
         Default 'Nelder-Mead'.
     z0 : array-like, optional
         Initial guess in z-space (length 4). If None, defaults to zeros, which
-        corresponds to f = (1/3, 1/3, 1/3) and dust/grain at the bounds midpoint.
+        corresponds to f = (1/3, 1/3, 1/3) and LAP/grain at the bounds midpoint.
     """
     if shade is None:
         shade = np.zeros_like(spectrum_target)
@@ -757,7 +757,7 @@ def speedy_invert_scipy_softmax(interpolator: spires_inversion.interpolator.LutI
     grain_max = float(interpolator.grain_sizes.max())
 
     if z0 is None:
-        # Default physical guess: f_snow=0.5, f_shade=0.05, dust=10, grain=250
+        # Default physical guess: f_snow=0.5, f_shade=0.05, lap=10, grain=250
         # Map to z-space: z_bg pinned to 0, sigmoid logit for bounded params.
         z0 = _x_to_z(np.array([0.5, 0.05, 10.0, 250.0]),
                     lap_min, lap_max, grain_min, grain_max)
@@ -771,12 +771,12 @@ def speedy_invert_scipy_softmax(interpolator: spires_inversion.interpolator.LutI
     z = res.x
     e = np.exp(np.array([z[0], z[1], 0.0]) - max(z[0], z[1], 0.0))
     f_snow, f_shade, _ = e / e.sum()
-    dust = lap_min + (lap_max - lap_min) / (1.0 + np.exp(-z[2]))
+    lap = lap_min + (lap_max - lap_min) / (1.0 + np.exp(-z[2]))
     grain = grain_min + (grain_max - grain_min) / (1.0 + np.exp(-z[3]))
-    res.x = np.array([f_snow, f_shade, dust, grain])
+    res.x = np.array([f_snow, f_shade, lap, grain])
 
     model_refl = interpolator.interpolate_all(solar_angle=solar_angle,
-                                              lap_concentration=dust, grain_size=grain)
+                                              lap_concentration=lap, grain_size=grain)
     return res, model_refl
 
 
@@ -812,8 +812,8 @@ def speedy_invert_scipy(interpolator: spires_inversion.interpolator.LutInterpola
         `{'disp': False, 'iprint': 100, 'maxiter': 1000, 'ftol': 1e-9}`
     mode : int, optional
         Number of parameters in model (default: 3).
-        3 = Simplified model (f_snow, dust, grain_size).
-        4 = Full model (f_snow, f_shade, dust, grain_size).
+        3 = Simplified model (f_snow, lap, grain_size).
+        4 = Full model (f_snow, f_shade, lap, grain_size).
         Use mode=3 when f_snow is near 100% to avoid overfitting.
     method : str, optional
         SciPy optimization method (default: 'SLSQP').
@@ -872,7 +872,7 @@ def speedy_invert_scipy(interpolator: spires_inversion.interpolator.LutInterpola
         # inequality: constraint is => 0
         constraints = {"type": "ineq", "fun": lambda x: 1 - x[0] + x[1]}
 
-        # initial guesses for f_snow, f_shade, dust, & grain size
+        # initial guesses for f_snow, f_shade, lap, & grain size
         x0 = np.array([0.5, 0.05, 10, 250])
 
         res = scipy.optimize.minimize(snow_diff_4,
@@ -885,7 +885,7 @@ def speedy_invert_scipy(interpolator: spires_inversion.interpolator.LutInterpola
     elif mode == 3:
         bounds = np.array([bounds_fsnow, bounds_lap, bounds_grain])
 
-        # initial guesses for f_snow, dust, & grain size
+        # initial guesses for f_snow, lap, & grain size
         x0 = np.array([0.5, 10, 250])
 
         res = scipy.optimize.minimize(snow_diff_3,
@@ -973,7 +973,7 @@ def speedy_invert_scipy_normalized(interpolator: spires_inversion.interpolator.L
         - res : scipy.optimize.OptimizeResult
           Optimization result with res.x containing:
           [f_snow, f_shade, lap_concentration, grain_size]
-          (dust and grain_size are converted back to physical units)
+          (lap and grain_size are converted back to physical units)
         - model_refl : numpy.ndarray
           The optimized modeled reflectance spectrum.
 

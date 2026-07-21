@@ -106,7 +106,7 @@ class LutInterpolator:
         solar_angles: numpy.ndarray:
             1D array of solar angle coordinates
         lap_concentrations: numpy.ndarray:
-            1D array of dust concentration coordinates
+            1D array of LAP concentration coordinates
         grain_sizes: numpy.ndarray
             1D array of grain size coordinates
         lut_file: str
@@ -221,7 +221,7 @@ class LutInterpolator:
 
         Returns
         -------
-        Interpolated snow reflectance for given band and solar angle, dust concentration and grain size
+        Interpolated snow reflectance for given band and solar angle, LAP concentration and grain size
 
         """
         pts = np.array([band, solar_angle, lap_concentration, grain_size])
@@ -237,7 +237,7 @@ class LutInterpolator:
 
         Returns
         -------
-        Interpolated snow reflectance for given band and solar angle, dust concentration and grain size
+        Interpolated snow reflectance for given band and solar angle, LAP concentration and grain size
 
         """
         return self.interpolator_scipy(pts)
@@ -254,7 +254,7 @@ class LutInterpolator:
             solar angle to interpolate the reflectance for.
             Units of `solar_angle` has to match the units in `self.solar_angles` (e.g. degrees).
         lap_concentration: double
-            dust concentration to interpolate the reflectance for.
+            LAP concentration to interpolate the reflectance for.
             Units of `lap_concentration` has to match the units in `self.lap_concentrations` (e.g. ppm)
         grain_size: double
             grain size to interpolate the reflectance for.
@@ -262,7 +262,7 @@ class LutInterpolator:
 
         Returns
         -------
-        Interpolated snow reflectance for given band and solar angle, dust concentration and grain size
+        Interpolated snow reflectance for given band and solar angle, LAP concentration and grain size
 
         Examples
         --------
@@ -292,7 +292,7 @@ class LutInterpolator:
 
         Returns
         -------
-        Interpolated snow reflectance for given band and solar angle, dust concentration and grain size
+        Interpolated snow reflectance for given band and solar angle, LAP concentration and grain size
 
         Examples
         --------
@@ -317,7 +317,7 @@ class LutInterpolator:
             solar angle to interpolate the spectrum for.
             Units of `solar_angle` has to match the units in `self.solar_angles` (e.g. degrees).
         lap_concentration: double
-            dust concentration to interpolate the spectrum for.
+            LAP concentration to interpolate the spectrum for.
             Units of `lap_concentration` has to match the units in `self.lap_concentrations` (e.g. ppm)
         grain_size: double
             grain size to interpolate the spectrum for.
@@ -355,7 +355,7 @@ class LutInterpolator:
             solar angle to interpolate the spectrum for.
             Units of `solar_angle` has to match the units in `self.solar_angles` (e.g. degrees).
         lap_concentration: double
-            dust concentration to interpolate the spectrum for.
+            LAP concentration to interpolate the spectrum for.
             Units of `lap_concentration` has to match the units in `self.lap_concentrations` (e.g. ppm)
         grain_size: double
             grain size to interpolate the spectrum for.
