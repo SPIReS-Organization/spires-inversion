@@ -6,8 +6,105 @@ from spires_contract.spectra import (
     validate_solar_angles,
 )
 from spires_contract.lut import validate_lut
+from spires_contract import (
+    ContractError,
+    SpiresData,
+    validate_for_inversion,
+    validate_results,
+)
+from spires_inversion.lut import kernel_lut_arrays, load_reflectance_lut
+from spires_inversion.results import build_results
 import numpy as np
 import scipy
+
+
+def invert(
+    data: SpiresData,
+    *,
+    lut,
+    max_eval=100,
+    algorithm=6,
+    apply_valid_inversion_mask=True,
+):
+    """Invert one full-resolution, contract-valid :class:`SpiresData` scene.
+
+    The optimizer is called only for pixels whose required inputs are finite
+    and, by default, whose optional ``valid_inversion_mask`` is true. Results
+    are scattered back to ``(y, x)`` and all ineligible pixels remain NaN.
+    """
+    validate_for_inversion(data)
+    if not isinstance(apply_valid_inversion_mask, (bool, np.bool_)):
+        raise TypeError("apply_valid_inversion_mask must be boolean")
+
+    reflectance_lut = load_reflectance_lut(lut, expected_lap_type="dust")
+    _validate_scene_lut_bands(data.scene["reflectance"], reflectance_lut)
+    lut_arrays = kernel_lut_arrays(reflectance_lut)
+
+    target = data.scene["reflectance"]
+    background = data.background
+    solar_zenith = data.scene["solar_zenith"]
+    finite_inputs = (
+        np.isfinite(target.values).all(axis=-1)
+        & np.isfinite(background.values).all(axis=-1)
+        & np.isfinite(solar_zenith.values)
+    )
+    eligible = finite_inputs
+    valid_mask = data.scene.get("valid_inversion_mask")
+    if apply_valid_inversion_mask and valid_mask is not None:
+        eligible = eligible & np.asarray(valid_mask.values, dtype=bool)
+
+    eligibility_mask = target.isel(band=0, drop=True).copy(
+        data=np.asarray(eligible, dtype=bool)
+    )
+    eligibility_mask.name = "effective_inversion_eligibility"
+
+    kernel_results = np.full(target.shape[:2] + (4,), np.nan, dtype=np.float64)
+    if np.any(eligible):
+        initial = np.asarray(
+            [
+                0.5,
+                0.05,
+                _within_axis(10.0, lut_arrays["lap_concentrations"]),
+                _within_axis(np.sqrt(250.0), lut_arrays["sqrt_grain_radii"]),
+            ],
+            dtype=np.float64,
+        )
+        inverted = speedy_invert_array1d(
+            spectra_targets=np.ascontiguousarray(target.values[eligible]),
+            spectra_backgrounds=np.ascontiguousarray(background.values[eligible]),
+            obs_solar_angles=np.ascontiguousarray(solar_zenith.values[eligible]),
+            bands=lut_arrays["bands"],
+            solar_angles=lut_arrays["solar_angles"],
+            dust_concentrations=lut_arrays["lap_concentrations"],
+            grain_sizes=lut_arrays["sqrt_grain_radii"],
+            reflectances=lut_arrays["reflectances"],
+            max_eval=max_eval,
+            x0=initial,
+            algorithm=algorithm,
+        )
+        kernel_results[eligible] = inverted
+
+    results = build_results(kernel_results, eligibility_mask, lap_type="dust")
+    validate_results(
+        results,
+        scene=data.scene,
+        eligibility_mask=eligibility_mask,
+    )
+    return data.assign_results(results)
+
+
+def _within_axis(value, axis):
+    return float(np.clip(value, np.asarray(axis)[0], np.asarray(axis)[-1]))
+
+
+def _validate_scene_lut_bands(target, lut):
+    scene_bands = np.asarray(target["band"].values)
+    lut_bands = np.asarray(lut["reflectance"]["band"].values)
+    if not np.array_equal(scene_bands, lut_bands):
+        raise ContractError(
+            "scene and reflectance LUT band coordinates must match exactly and "
+            "in the same order"
+        )
 
 
 def _require_float32(name, arr):
