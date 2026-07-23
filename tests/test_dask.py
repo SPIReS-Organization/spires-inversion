@@ -23,20 +23,31 @@ def _make_inputs(ny=2, nx=3, nt=None, chunks=None):
     n_bands = spectrum_target.size
     tgt32 = spectrum_target.astype(np.float32)
     bg32 = spectrum_background.astype(np.float32)
+    # Geospatial y/x coords, as a real scene carries them (the results
+    # contract requires y/x coords present on every output variable).
+    ycoord = np.arange(ny, dtype=np.float64)
+    xcoord = np.arange(nx, dtype=np.float64)
     if nt is None:
         targets = xr.DataArray(
             np.broadcast_to(tgt32, (ny, nx, n_bands)).copy(),
-            dims=['y', 'x', 'band'])
-        angles = xr.DataArray(np.full((ny, nx), solar_angle), dims=['y', 'x'])
+            dims=['y', 'x', 'band'],
+            coords={'y': ycoord, 'x': xcoord})
+        angles = xr.DataArray(
+            np.full((ny, nx), solar_angle), dims=['y', 'x'],
+            coords={'y': ycoord, 'x': xcoord})
     else:
         targets = xr.DataArray(
             np.broadcast_to(tgt32, (nt, ny, nx, n_bands)).copy(),
-            dims=['time', 'y', 'x', 'band'])
-        angles = xr.DataArray(np.full((nt, ny, nx), solar_angle), dims=['time', 'y', 'x'])
+            dims=['time', 'y', 'x', 'band'],
+            coords={'y': ycoord, 'x': xcoord})
+        angles = xr.DataArray(
+            np.full((nt, ny, nx), solar_angle), dims=['time', 'y', 'x'],
+            coords={'y': ycoord, 'x': xcoord})
 
     backgrounds = xr.DataArray(
         np.broadcast_to(bg32, (ny, nx, n_bands)).copy(),
-        dims=['y', 'x', 'band'])
+        dims=['y', 'x', 'band'],
+        coords={'y': ycoord, 'x': xcoord})
 
     if chunks is not None:
         targets = targets.chunk(chunks)
@@ -102,3 +113,35 @@ def test_speedy_invert_dask_chunked():
     assert any(res[v].chunks is not None for v in res.data_vars)
     res = res.compute()
     _assert_pixels_match(res, ny=2, nx=3)
+
+
+def test_speedy_invert_dask_output_conforms_to_results_contract():
+    from spires_contract import validate_results
+
+    targets, backgrounds, angles = _make_inputs(ny=2, nx=3)
+    res = spires_inversion.speedy_invert_dask(
+        targets, backgrounds, angles, interpolator,
+        scatter_lut=False, algorithm=1)
+    if hasattr(res, 'compute'):
+        res = res.compute()
+
+    # Contract requires float32 result vars, y/x coords, and lap_type='dust'.
+    for name in ['fsnow', 'fshade', 'lap_concentration', 'grain_radius']:
+        assert res[name].dtype == np.float32
+        assert 'y' in res[name].coords and 'x' in res[name].coords
+    assert res['lap_concentration'].attrs.get('lap_type') == 'dust'
+
+    # The canonical single-scene results validator must accept the output.
+    validate_results(res)
+
+
+def test_speedy_invert_dask_eager_output_is_validated():
+    """The eager (non-dask) path validates its own output before returning."""
+    from spires_contract import validate_results
+
+    targets, backgrounds, angles = _make_inputs(ny=2, nx=3)
+    # No .compute() call: an eager (numpy-backed) result must already conform.
+    res = spires_inversion.speedy_invert_dask(
+        targets, backgrounds, angles, interpolator,
+        scatter_lut=False, algorithm=1)
+    validate_results(res)

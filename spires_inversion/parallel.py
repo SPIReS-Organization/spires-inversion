@@ -1,31 +1,30 @@
 """Dask-parallel inversion of snow reflectance spectra."""
 import numpy as np
 
+from spires_contract import conventions as _c
+from spires_contract import validate_results
 from spires_inversion.invert import speedy_invert_array2d
 
 
-_VARIABLE_ATTRS = {
-    'fsnow': {
-        'long_name': 'Raw Snow Fraction (pre-fshade/canopy correction)',
-        'units': '1',
-        'valid_range': [0, 1],
-    },
-    'fshade': {
-        'long_name': 'Fractional Shaded Area',
-        'units': '1',
-        'valid_range': [0, 1],
-    },
-    'lap_concentration': {
-        'long_name': 'Light-Absorbing Particle Concentration in Snow',
-        'units': 'ppm',
-        'valid_range': [0, 10000],
-    },
-    'grain_radius': {
-        'long_name': 'Effective Snow Grain Radius',
-        'units': 'μm',
-        'valid_range': [10, 2000],
-    },
+# Result-variable attrs sourced from the results contract so long_name/units
+# cannot drift from what validate_results enforces. valid_range is retained as
+# advisory metadata (not part of the contract).
+_VALID_RANGES = {
+    'fsnow': [0, 1],
+    'fshade': [0, 1],
+    'lap_concentration': [0, 10000],
+    'grain_radius': [10, 2000],
 }
+_VARIABLE_ATTRS = {
+    name: {
+        'long_name': _c.RESULT_LONG_NAMES[name],
+        'units': _c.RESULT_UNITS[name],
+        'valid_range': _VALID_RANGES[name],
+    }
+    for name in _c.RESULT_VARIABLES
+}
+# lap_concentration additionally carries the LAP species (contract-required).
+_VARIABLE_ATTRS['lap_concentration']['lap_type'] = _c.SUPPORTED_LAP_TYPES[0]
 
 
 def _import_dask():
@@ -110,7 +109,10 @@ def _to_dataset(results):
         0: 'fsnow', 1: 'fshade', 2: 'lap_concentration', 3: 'grain_radius',
     })
     for name, attrs in _VARIABLE_ATTRS.items():
-        ds[name].attrs = attrs
+        # Results cross the postprocess boundary as float32 (contract dtype);
+        # the C++ kernel computes in double and returns float64, so cast here.
+        ds[name] = ds[name].astype(np.float32)
+        ds[name].attrs = dict(attrs)
     return ds
 
 
@@ -262,4 +264,23 @@ def speedy_invert_dask(spectra_targets, spectra_backgrounds, obs_solar_angles,
         vectorize=False,
     )
 
-    return _to_dataset(results)
+    ds = _to_dataset(results)
+
+    # Validate at the output boundary, but only when the result is eager
+    # (numpy-backed): validate_results reads .values and would force a
+    # .compute() on a lazy/chunked result, defeating dask parallelism. The
+    # contract also targets single-scene (y, x) results, so skip time stacks.
+    # Lazy or time-stacked callers validate per-scene after .compute().
+    if _is_eager_single_scene(ds):
+        validate_results(ds)
+
+    return ds
+
+
+def _is_eager_single_scene(ds):
+    """True if ds is numpy-backed (not dask) and has exactly (y, x) dims."""
+    if any(ds[name].chunks is not None for name in _c.RESULT_VARIABLES):
+        return False
+    return all(
+        tuple(ds[name].dims) == _c.RESULT_DIMS for name in _c.RESULT_VARIABLES
+    )
