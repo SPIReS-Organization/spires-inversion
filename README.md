@@ -13,7 +13,7 @@
 
 ## Overview
 
-SPIRES retrieves snow properties (grain size, dust concentration, fractional snow-covered area) from satellite multispectral imagery by inverting reflectance spectra using lookup tables generated from Mie-scattering theory.
+SPIRES retrieves snow properties (grain radius, light-absorbing-particle concentration, snow endmember fraction) from satellite multispectral imagery by inverting reflectance spectra using lookup tables generated from Mie-scattering theory.
 
 **Key features:**
 - Hybrid Python/C++ implementation for performance (3000x speedup over pure Python)
@@ -92,7 +92,7 @@ spectrum_target = np.array([0.3424, 0.366, 0.3624, 0.3893,
 spectrum_background = np.array([0.0182, 0.0265, 0.0283, 0.0561,
                                 0.0954, 0.1204, 0.1249, 0.0789, 0.1406])
 
-fsca, fshade, dust, grain_size = spires_inversion.speedy_invert(
+fsnow, fshade, lap, grain_radius = spires_inversion.speedy_invert(
     spectrum_target=spectrum_target,
     spectrum_background=spectrum_background,
     solar_angle=55.73,

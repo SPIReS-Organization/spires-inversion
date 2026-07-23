@@ -69,8 +69,9 @@ spectrum_background = np.array([0.0182, 0.0265, 0.0283, 0.0561,
                                0.0954, 0.1204, 0.1249, 0.0789, 0.1406])
 solar_angle = 55.73  # degrees
 
-# Run inversion
-fsca, fshade, dust, grain_size = spires_inversion.speedy_invert(
+# Run inversion. speedy_invert returns a positional tuple:
+# (fsnow, fshade, lap, grain_radius)
+fsnow, fshade, lap, grain_radius = spires_inversion.speedy_invert(
     spectrum_target=spectrum_target,
     spectrum_background=spectrum_background,
     solar_angle=solar_angle,
@@ -78,9 +79,9 @@ fsca, fshade, dust, grain_size = spires_inversion.speedy_invert(
     algorithm=1  # LN_COBYLA
 )
 
-print(f"Fractional snow cover: {fsca:.3f}")
-print(f"Grain size: {grain_size:.1f} μm")
-print(f"Dust concentration: {dust:.1f} ppm")
+print(f"Snow endmember (fsnow): {fsnow:.3f}")
+print(f"Grain radius: {grain_radius:.1f} μm")
+print(f"LAP concentration: {lap:.1f} ppm")
 ```
 
 ### Batch Processing
@@ -98,11 +99,11 @@ results = spires_inversion.speedy_invert_array2d(
     algorithm=2  # LN_NELDERMEAD
 )
 
-# Extract results
-fsca = results[:, :, 0]
+# Extract results (columns: fsnow, fshade, lap, grain_radius)
+fsnow = results[:, :, 0]
 fshade = results[:, :, 1]
-dust = results[:, :, 2]
-grain_size = results[:, :, 3]
+lap = results[:, :, 2]
+grain_radius = results[:, :, 3]
 ```
 
 ### Using with xarray
@@ -175,18 +176,19 @@ SPIRES (SPectral Inversion of REflectance from Snow) retrieves snow properties b
 1. **Loading pre-computed lookup tables (LUTs)** - Generated from Mie scattering theory
 2. **Defining a forward model** - Mixed pixel reflectance as a linear combination:
    ```
-   R_mixed = fsca * R_snow(dust, grain_size, angle) +
+   R_mixed = fsnow * R_snow(lap, grain_radius, angle) +
              fshade * R_shade +
-             (1 - fsca - fshade) * R_background
+             (1 - fsnow - fshade) * R_background
    ```
 3. **Optimizing parameters** - Minimizes difference between observed and modeled spectra
-4. **Returning snow properties** - Fractional snow cover, grain size, dust concentration
+4. **Returning snow properties** - Snow endmember fraction, grain radius, LAP concentration
 
 ## Key Parameters
 
-- **fsca**: Fractional Snow-Covered Area (0-1)
-- **grain_size**: Effective snow grain radius (30-1200 μm)
-- **dust**: Dust/impurity concentration in snow (0-1000 ppm)
+- **fsnow**: Fractional snow endmember (0-1) — the snow-covered fraction
+- **grain_radius**: Effective snow grain radius (30-1200 μm)
+- **lap**: Light-absorbing-particle concentration in snow (0-1000 ppm; the LUT
+  is parameterized for dust)
 - **R_0** (background): Snow-free reflectance spectrum
 
 ## Performance Notes
