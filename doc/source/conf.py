@@ -7,8 +7,8 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'spires-inversion'
-copyright = '2024, Niklas Griessbaum'
-author = 'Niklas Griessbaum'
+copyright = '2024, The SPIReS Organization'
+author = 'The SPIReS Organization'
 
 # Get version from setuptools-scm
 # Since the package isn't installed on ReadTheDocs, we use setuptools_scm directly
@@ -73,7 +73,10 @@ autodoc_default_flags = ['members', 'undoc-members', 'private-members', 'special
 
 html_theme = 'pydata_sphinx_theme'
 
-#html_static_path = ['_static']
+# SPIReS family logo (shared brand across the portal + subprojects).
+html_static_path = ['_static']
+html_logo = '_static/logo.svg'
+html_favicon = '_static/logo.svg'
 
 autosummary_generate = True# ['spires_inversion.interpolate']
 #autosummary_generate = ['autosummary/*.rst']
