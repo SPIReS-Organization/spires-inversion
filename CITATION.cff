@@ -21,7 +21,7 @@ authors:
 version: 0.2.8
 date-released: 2026-02-23
 repository-code: "https://github.com/NiklasPhabian/SpiPy"
-url: "https://spipy.readthedocs.io"
+url: "https://spires-inversion.readthedocs.io"
 license: MIT
 doi: 10.5281/zenodo.18747284
 keywords:
