@@ -10,7 +10,7 @@ ts = r.sel(time='2024-02-25').squeeze().drop_vars('time')
 interpolator = spires_inversion.LutInterpolator(lut_file='data/lut_sentinel2b_b2to12_3um_dust.mat')
 bands = interpolator.bands
 solar_angles = interpolator.solar_angles
-dust_concentrations = interpolator.dust_concentrations
+lap_concentrations = interpolator.lap_concentrations
 grain_sizes = interpolator.grain_sizes
 reflectances = interpolator.reflectances
 
@@ -28,7 +28,7 @@ res = spires_inversion.core.invert(spectrum_background=spectrum_background,
                          solar_angle=solar_angle,
                          lut_bands=bands,
                          lut_solar_angles=solar_angles,
-                         lut_dust_concentrations=dust_concentrations,
+                         lut_lap_concentrations=lap_concentrations,
                          lut_grain_sizes=grain_sizes,
                          lut_reflectances=reflectances,
                          max_eval=100,

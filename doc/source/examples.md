@@ -20,7 +20,7 @@ This page links to example Jupyter notebooks demonstrating the usage of spires-i
   - Loading preprocessed Sentinel-2 data
   - Applying SPIRES algorithm
   - Batch processing with Dask
-  - Saving inversion results (fsca, grain size, dust concentration)
+  - Saving inversion results (fsnow, grain radius, LAP concentration)
 
 ### 4. Postprocessing
 

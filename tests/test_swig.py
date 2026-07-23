@@ -15,13 +15,13 @@ spectrum_background = np.array(
 spectrum_shade = np.zeros_like(spectrum_target, dtype=np.float64)
 solar_angle = 55.73733298
 
-dust_concentration = 491
+lap_concentration = 491
 grain_size = 550
 x0 = [0.5, 0.05, 10, 250]
 
 
 def test_interpolate_all():
-    ret = interpolator.interpolate_all(solar_angle=solar_angle, dust_concentration=dust_concentration,
+    ret = interpolator.interpolate_all(solar_angle=solar_angle, lap_concentration=lap_concentration,
                                        grain_size=grain_size)
     expected = np.array(
         [0.69418118, 0.72305336, 0.75899187, 0.76630307, 0.76921281, 0.75832135, 0.01766575, 0.02501143, 0.73101483])
@@ -33,10 +33,10 @@ def test_interpolate_all_array():
     ret = spires_inversion.core.interpolate_all_array(lut_reflectances=interpolator.reflectances,
                                             lut_bands=interpolator.bands,
                                             lut_solar_angles=interpolator.solar_angles,
-                                            lut_dust_concentrations=interpolator.dust_concentrations,
+                                            lut_lap_concentrations=interpolator.lap_concentrations,
                                             lut_grain_sizes=interpolator.grain_sizes,
                                             solar_angle=solar_angle,
-                                            dust_concentration=dust_concentration,
+                                            lap_concentration=lap_concentration,
                                             grain_size=grain_size)
     expected = np.array(
         [0.69418118, 0.72305336, 0.75899187, 0.76630307, 0.76921281, 0.75832135, 0.01766575, 0.02501143, 0.73101483])
@@ -44,7 +44,7 @@ def test_interpolate_all_array():
 
 
 def test_spectrum_difference():
-    x = [0.5, 0.01, dust_concentration, grain_size]
+    x = [0.5, 0.01, lap_concentration, grain_size]
     ret = spires_inversion.core.spectrum_difference(x=x,
                                           spectrum_background=spectrum_background,
                                           spectrum_target=spectrum_target,
@@ -52,7 +52,7 @@ def test_spectrum_difference():
                                           solar_angle=solar_angle,
                                           lut_bands=interpolator.bands,
                                           lut_solar_angles=interpolator.solar_angles,
-                                          lut_dust_concentrations=interpolator.dust_concentrations,
+                                          lut_lap_concentrations=interpolator.lap_concentrations,
                                           lut_grain_sizes=interpolator.grain_sizes,
                                           lut_reflectances=interpolator.reflectances)
 
@@ -66,7 +66,7 @@ def test_invert():
                            solar_angle=solar_angle,
                            lut_bands=interpolator.bands,
                            lut_solar_angles=interpolator.solar_angles,
-                           lut_dust_concentrations=interpolator.dust_concentrations,
+                           lut_lap_concentrations=interpolator.lap_concentrations,
                            lut_grain_sizes=interpolator.grain_sizes,
                            lut_reflectances=interpolator.reflectances,
                            max_eval=100,
@@ -79,7 +79,7 @@ def test_invert():
     x = np.asarray(x)
     assert x.shape == (4,)
     assert 0 <= x[0] <= 1 and 0 <= x[1] <= 1 and x[0] + x[1] <= 1 + 1e-6
-    assert interpolator.dust_concentrations.min() <= x[2] <= interpolator.dust_concentrations.max()
+    assert interpolator.lap_concentrations.min() <= x[2] <= interpolator.lap_concentrations.max()
     assert interpolator.grain_sizes.min() <= x[3] <= interpolator.grain_sizes.max()
     assert _residual(x, spectrum_target, spectrum_background) < 0.05
 
@@ -98,7 +98,7 @@ def test_invert_array():
                                obs_solar_angles=obs_solar_angles,
                                lut_bands=interpolator.bands,
                                lut_solar_angles=interpolator.solar_angles,
-                               lut_dust_concentrations=interpolator.dust_concentrations,
+                               lut_lap_concentrations=interpolator.lap_concentrations,
                                lut_grain_sizes=interpolator.grain_sizes,
                                lut_reflectances=interpolator.reflectances.astype(np.float32),
                                results=results,
@@ -113,10 +113,10 @@ def test_invert_array():
     # Identical inputs (same pixel tiled n times) must give identical outputs.
     for i in range(1, n):
         np.testing.assert_array_equal(results[i], results[0])
-    fsca, fshade, dust, grain = results[0]
-    assert 0 <= fsca <= 1
+    fsnow, fshade, dust, grain = results[0]
+    assert 0 <= fsnow <= 1
     assert 0 <= fshade <= 1
-    assert interpolator.dust_concentrations.min() <= dust <= interpolator.dust_concentrations.max()
+    assert interpolator.lap_concentrations.min() <= dust <= interpolator.lap_concentrations.max()
     assert interpolator.grain_sizes.min() <= grain <= interpolator.grain_sizes.max()
     residual = _residual(results[0], spectrum_target, spectrum_background)
     assert residual < 0.05, f"residual {residual} too large"
@@ -164,15 +164,15 @@ def test_invert_array2d():
     # (catches a bug where every pixel reads from the same source row).
     assert not np.allclose(results[0, 0], results[1, 0])
 
-    # Physical plausibility: fsca, fshade in [0,1]; dust and grain within LUT range.
-    fsca = results[..., 0]
+    # Physical plausibility: fsnow, fshade in [0,1]; dust and grain within LUT range.
+    fsnow = results[..., 0]
     fshade = results[..., 1]
     dust = results[..., 2]
     grain = results[..., 3]
-    assert np.all((fsca >= 0) & (fsca <= 1))
+    assert np.all((fsnow >= 0) & (fsnow <= 1))
     assert np.all((fshade >= 0) & (fshade <= 1))
-    assert np.all((dust >= interpolator.dust_concentrations.min()) &
-                  (dust <= interpolator.dust_concentrations.max()))
+    assert np.all((dust >= interpolator.lap_concentrations.min()) &
+                  (dust <= interpolator.lap_concentrations.max()))
     assert np.all((grain >= interpolator.grain_sizes.min()) &
                   (grain <= interpolator.grain_sizes.max()))
 
@@ -189,7 +189,7 @@ def test_invert_array2d():
             solar_angle=solar_angle,
             lut_bands=interpolator.bands,
             lut_solar_angles=interpolator.solar_angles,
-            lut_dust_concentrations=interpolator.dust_concentrations,
+            lut_lap_concentrations=interpolator.lap_concentrations,
             lut_grain_sizes=interpolator.grain_sizes,
             lut_reflectances=interpolator.reflectances)
         assert residual < 0.05, f"row {row} residual {residual} too large"
@@ -201,7 +201,7 @@ def test_interpolate_all_handles_non_9_band_lut():
     pins the contract that interpolate_all returns one value per band."""
     n_bands = interpolator.bands.size
     ret = interpolator.interpolate_all(solar_angle=solar_angle,
-                                       dust_concentration=dust_concentration,
+                                       lap_concentration=lap_concentration,
                                        grain_size=grain_size)
     assert np.asarray(ret).shape == (n_bands,)
 
@@ -215,7 +215,7 @@ def _residual(x, target, background):
         solar_angle=solar_angle,
         lut_bands=interpolator.bands,
         lut_solar_angles=interpolator.solar_angles,
-        lut_dust_concentrations=interpolator.dust_concentrations,
+        lut_lap_concentrations=interpolator.lap_concentrations,
         lut_grain_sizes=interpolator.grain_sizes,
         lut_reflectances=interpolator.reflectances)
 
@@ -235,7 +235,7 @@ def test_invert_softmax(algorithm, name):
                            solar_angle=solar_angle,
                            lut_bands=interpolator.bands,
                            lut_solar_angles=interpolator.solar_angles,
-                           lut_dust_concentrations=interpolator.dust_concentrations,
+                           lut_lap_concentrations=interpolator.lap_concentrations,
                            lut_grain_sizes=interpolator.grain_sizes,
                            lut_reflectances=interpolator.reflectances,
                            max_eval=500,
@@ -244,11 +244,11 @@ def test_invert_softmax(algorithm, name):
     x = np.asarray(x)
 
     # Physical plausibility: simplex + box bounds satisfied by construction.
-    assert 0 <= x[0] <= 1, f"{name}: f_sca {x[0]} out of [0,1]"
+    assert 0 <= x[0] <= 1, f"{name}: f_snow {x[0]} out of [0,1]"
     assert 0 <= x[1] <= 1, f"{name}: f_shade {x[1]} out of [0,1]"
-    assert x[0] + x[1] <= 1 + 1e-6, f"{name}: f_sca + f_shade > 1"
-    assert (interpolator.dust_concentrations.min() <= x[2] <=
-            interpolator.dust_concentrations.max()), f"{name}: dust {x[2]} out of LUT range"
+    assert x[0] + x[1] <= 1 + 1e-6, f"{name}: f_snow + f_shade > 1"
+    assert (interpolator.lap_concentrations.min() <= x[2] <=
+            interpolator.lap_concentrations.max()), f"{name}: dust {x[2]} out of LUT range"
     assert (interpolator.grain_sizes.min() <= x[3] <=
             interpolator.grain_sizes.max()), f"{name}: grain {x[3]} out of LUT range"
 
@@ -261,7 +261,7 @@ def test_invert_softmax(algorithm, name):
                                   solar_angle=solar_angle,
                                   lut_bands=interpolator.bands,
                                   lut_solar_angles=interpolator.solar_angles,
-                                  lut_dust_concentrations=interpolator.dust_concentrations,
+                                  lut_lap_concentrations=interpolator.lap_concentrations,
                                   lut_grain_sizes=interpolator.grain_sizes,
                                   lut_reflectances=interpolator.reflectances,
                                   max_eval=500, x0=x0, algorithm=1)
@@ -378,7 +378,7 @@ def test_invert_unknown_algorithm_raises():
                            solar_angle=solar_angle,
                            lut_bands=interpolator.bands,
                            lut_solar_angles=interpolator.solar_angles,
-                           lut_dust_concentrations=interpolator.dust_concentrations,
+                           lut_lap_concentrations=interpolator.lap_concentrations,
                            lut_grain_sizes=interpolator.grain_sizes,
                            lut_reflectances=interpolator.reflectances,
                            max_eval=100, x0=x0, algorithm=99)
@@ -440,7 +440,7 @@ def test_speedy_invert_array2d_rejects_float64_imagery():
 
 
 def test_float32_gives_physical_results():
-    """The float32 path produces physically plausible retrievals (fsca/fshade in
+    """The float32 path produces physically plausible retrievals (fsnow/fshade in
     [0,1]; dust/grain within LUT range)."""
     tgt, bg, sza = _f32_image_setup()
     interp = spires_inversion.LutInterpolator(
@@ -450,7 +450,7 @@ def test_float32_gives_physical_results():
         obs_solar_angles=sza, interpolator=interp, algorithm=6, x0=np.array(x0))
     assert np.all((res[..., 0] >= 0) & (res[..., 0] <= 1))
     assert np.all((res[..., 1] >= 0) & (res[..., 1] <= 1))
-    assert np.all((res[..., 2] >= interp.dust_concentrations.min()) &
-                  (res[..., 2] <= interp.dust_concentrations.max()))
+    assert np.all((res[..., 2] >= interp.lap_concentrations.min()) &
+                  (res[..., 2] <= interp.lap_concentrations.max()))
     assert np.all((res[..., 3] >= interp.grain_sizes.min()) &
                   (res[..., 3] <= interp.grain_sizes.max()))

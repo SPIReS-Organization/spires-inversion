@@ -83,7 +83,7 @@ class LutInterpolator:
     to interpolate ideal snow reflectances.
     """
 
-    def __init__(self, grid=None, reflectances=None, bands=None, solar_angles=None, dust_concentrations=None,
+    def __init__(self, grid=None, reflectances=None, bands=None, solar_angles=None, lap_concentrations=None,
                  grain_sizes=None, lut_file=None):
         """
 
@@ -92,21 +92,21 @@ class LutInterpolator:
         grid: xarray.DataArray
             Data array with
                 - data variable: reflectances
-                - coordinates: bands, solar_angles, dust_concentrations, grain_sizes and
+                - coordinates: bands, solar_angles, lap_concentrations, grain_sizes and
         reflectances: numpy.ndarray:
             4D array of reflectances with
             - dim1: bands
             - dim2: solar_angles
-            - dim3: dust_concentrations
+            - dim3: lap_concentrations
             - dim4: grain_sizes
-            If reflectances is specified, bands, solar_angles, dust_concentrations,
+            If reflectances is specified, bands, solar_angles, lap_concentrations,
             and grain_sizes have to be set as well
         bands: numpy.ndarray:
             1D array of band coordinates
         solar_angles: numpy.ndarray:
             1D array of solar angle coordinates
-        dust_concentrations: numpy.ndarray:
-            1D array of dust concentration coordinates
+        lap_concentrations: numpy.ndarray:
+            1D array of LAP concentration coordinates
         grain_sizes: numpy.ndarray
             1D array of grain size coordinates
         lut_file: str
@@ -124,12 +124,12 @@ class LutInterpolator:
                                  if reflectances is not None else reflectances)
             self.bands = bands
             self.solar_angles = solar_angles
-            self.dust_concentrations = dust_concentrations
+            self.lap_concentrations = lap_concentrations
             self.grain_sizes = grain_sizes
 
         self.interpolator_scipy = None
         self.solar_angles_is_linspace = False
-        self.dust_concentrations_is_linspace = False
+        self.lap_concentrations_is_linspace = False
         self.grain_sizes_is_linspace = False
         self.verify_linspace()
 
@@ -143,7 +143,7 @@ class LutInterpolator:
 
         """
         self.solar_angles_is_linspace = is_linspace(self.solar_angles)
-        self.dust_concentrations_is_linspace = is_linspace(self.dust_concentrations)
+        self.lap_concentrations_is_linspace = is_linspace(self.lap_concentrations)
         self.grain_sizes_is_linspace = is_linspace(self.grain_sizes)
 
     def load_mat(self, lut_file):
@@ -163,17 +163,17 @@ class LutInterpolator:
             self.reflectances = np.ascontiguousarray(
                 np.squeeze(lut_nc['#refs#']["h"][:]), dtype=np.float32)
             self.grain_sizes = np.squeeze(lut_nc['#refs#']['d'][:])
-            self.dust_concentrations = np.squeeze(lut_nc['#refs#']['e'][:])
+            self.lap_concentrations = np.squeeze(lut_nc['#refs#']['e'][:])
             self.solar_angles = np.squeeze(lut_nc['#refs#']['f'][:])
             self.bands = np.squeeze(lut_nc['#refs#']['g'][:])
 
     def to_xarray(self):
         da = xarray.DataArray(self.reflectances, 
                               name='reflectances',
-                              dims=['band', 'solar_angle', 'dust_concentration', 'grain_size'],               
+                              dims=['band', 'solar_angle', 'lap_concentration', 'grain_size'],               
                               coords={'band': self.bands, 
                                       'solar_angle': self.solar_angles, 
-                                      'dust_concentration': self.dust_concentrations, 
+                                      'lap_concentration': self.lap_concentrations, 
                                       'grain_size': self.grain_sizes})
         return da
 
@@ -186,7 +186,7 @@ class LutInterpolator:
         None
 
         """
-        points = [self.bands, self.solar_angles, self.dust_concentrations, self.grain_sizes]
+        points = [self.bands, self.solar_angles, self.lap_concentrations, self.grain_sizes]
         self.interpolator_scipy = scipy.interpolate.RegularGridInterpolator(points=points, values=self.reflectances)
 
     def make_scipy_interpolator_legacy(self):
@@ -197,18 +197,18 @@ class LutInterpolator:
         - dim1 = bands
         - dim2 = solar_angles
         - dim3 = grain_sizes
-        - dim4 = dust_concentrations
+        - dim4 = lap_concentrations
 
         Returns
         -------
         None
 
         """
-        points = [self.bands, self.solar_angles, self.grain_sizes, self.dust_concentrations]
+        points = [self.bands, self.solar_angles, self.grain_sizes, self.lap_concentrations]
         reflectances = self.reflectances.swapaxes(2, 3)
         self.interpolator_scipy = scipy.interpolate.RegularGridInterpolator(points=points, values=reflectances)
 
-    def interpolate_scipy(self, band, solar_angle, dust_concentration, grain_size):
+    def interpolate_scipy(self, band, solar_angle, lap_concentration, grain_size):
         """
         Interpolate values using the scipy RegularGridInterpolator interpolator
 
@@ -216,15 +216,15 @@ class LutInterpolator:
         ----------
         band: int
         solar_angle: double
-        dust_concentration: double
+        lap_concentration: double
         grain_size: double
 
         Returns
         -------
-        Interpolated snow reflectance for given band and solar angle, dust concentration and grain size
+        Interpolated snow reflectance for given band and solar angle, LAP concentration and grain size
 
         """
-        pts = np.array([band, solar_angle, dust_concentration, grain_size])
+        pts = np.array([band, solar_angle, lap_concentration, grain_size])
         return self.interpolator_scipy(pts)
 
     def interpolate_scipy_pts(self, pts):
@@ -237,12 +237,12 @@ class LutInterpolator:
 
         Returns
         -------
-        Interpolated snow reflectance for given band and solar angle, dust concentration and grain size
+        Interpolated snow reflectance for given band and solar angle, LAP concentration and grain size
 
         """
         return self.interpolator_scipy(pts)
 
-    def interpolate(self, band, solar_angle, dust_concentration, grain_size):
+    def interpolate(self, band, solar_angle, lap_concentration, grain_size):
         """
         Interpolate values using the c++ interpolator. Index lookup is performed in python.
 
@@ -253,30 +253,30 @@ class LutInterpolator:
         solar_angle: double
             solar angle to interpolate the reflectance for.
             Units of `solar_angle` has to match the units in `self.solar_angles` (e.g. degrees).
-        dust_concentration: double
-            dust concentration to interpolate the reflectance for.
-            Units of `dust_concentration` has to match the units in `self.dust_concentrations` (e.g. ppm)
+        lap_concentration: double
+            LAP concentration to interpolate the reflectance for.
+            Units of `lap_concentration` has to match the units in `self.lap_concentrations` (e.g. ppm)
         grain_size: double
             grain size to interpolate the reflectance for.
             Units of `grain_size` has to match the units in `self.grain_sizes` (e.g. micro meters).
 
         Returns
         -------
-        Interpolated snow reflectance for given band and solar angle, dust concentration and grain size
+        Interpolated snow reflectance for given band and solar angle, LAP concentration and grain size
 
         Examples
         --------
         >>> import spires_inversion
         >>> interpolator = spires_inversion.LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
-        >>> reflectance = interpolator.interpolate(band=1, solar_angle=0, dust_concentration=0.1, grain_size=30)
+        >>> reflectance = interpolator.interpolate(band=1, solar_angle=0, lap_concentration=0.1, grain_size=30)
         >>> round(reflectance, 6)
         0.992369
         """
         band_idx = band - 1
         solar_idx = get_index(coordinates=self.solar_angles, value=solar_angle)
-        dust_idx = get_index(coordinates=self.dust_concentrations, value=dust_concentration)
+        lap_idx = get_index(coordinates=self.lap_concentrations, value=lap_concentration)
         grain_idx = get_index(coordinates=self.grain_sizes, value=grain_size)
-        reflectance = spires_inversion.core.interpolate_idx(self.reflectances, band_idx, solar_idx, dust_idx, grain_idx)
+        reflectance = spires_inversion.core.interpolate_idx(self.reflectances, band_idx, solar_idx, lap_idx, grain_idx)
         return reflectance
 
     def interpolate_pts(self, pts):
@@ -287,12 +287,12 @@ class LutInterpolator:
         pts: array_like with
         - pts[0]: band
         - pts[1]: solar_angle
-        - pts[2]: dust_concentration
+        - pts[2]: lap_concentration
         - pts[3]: grain_size
 
         Returns
         -------
-        Interpolated snow reflectance for given band and solar angle, dust concentration and grain size
+        Interpolated snow reflectance for given band and solar angle, LAP concentration and grain size
 
         Examples
         --------
@@ -303,10 +303,10 @@ class LutInterpolator:
         0.992369
 
         """
-        reflectance = self.interpolate(band=pts[0], solar_angle=pts[1], dust_concentration=pts[2], grain_size=pts[3])
+        reflectance = self.interpolate(band=pts[0], solar_angle=pts[1], lap_concentration=pts[2], grain_size=pts[3])
         return reflectance
 
-    def interpolate_all_np_index(self, solar_angle, dust_concentration, grain_size):
+    def interpolate_all_np_index(self, solar_angle, lap_concentration, grain_size):
         """
         Interpolate spectrum using the c++ interpolator for all bands in self.bands.
         Derive the index values using numpy functions.
@@ -316,9 +316,9 @@ class LutInterpolator:
         solar_angle: double
             solar angle to interpolate the spectrum for.
             Units of `solar_angle` has to match the units in `self.solar_angles` (e.g. degrees).
-        dust_concentration: double
-            dust concentration to interpolate the spectrum for.
-            Units of `dust_concentration` has to match the units in `self.dust_concentrations` (e.g. ppm)
+        lap_concentration: double
+            LAP concentration to interpolate the spectrum for.
+            Units of `lap_concentration` has to match the units in `self.lap_concentrations` (e.g. ppm)
         grain_size: double
             grain size to interpolate the spectrum for.
             Units of `grain_size` has to match the units in `self.grain_sizes` (e.g. micro meter).
@@ -332,19 +332,19 @@ class LutInterpolator:
         >>> import spires_inversion
         >>> import numpy as np
         >>> interpolator = spires_inversion.LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
-        >>> np.round(interpolator.interpolate_all_np_index(solar_angle=0, dust_concentration=0.1, grain_size=30), 6)
+        >>> np.round(interpolator.interpolate_all_np_index(solar_angle=0, lap_concentration=0.1, grain_size=30), 6)
         array([0.992369, 0.987902, 0.974649, 0.967563, 0.960422, 0.944987,
                0.153387, 0.186445, 0.921608])
 
         """
         solar_idx = get_index(coordinates=self.solar_angles, value=solar_angle)
-        dust_idx = get_index(coordinates=self.dust_concentrations, value=dust_concentration)
+        lap_idx = get_index(coordinates=self.lap_concentrations, value=lap_concentration)
         grain_idx = get_index(coordinates=self.grain_sizes, value=grain_size)
-        reflectance = spires_inversion.core.interpolate_all_idx(self.reflectances, solar_idx, dust_idx, grain_idx)
+        reflectance = spires_inversion.core.interpolate_all_idx(self.reflectances, solar_idx, lap_idx, grain_idx)
         reflectance = np.array(reflectance)
         return reflectance
 
-    def interpolate_all(self, solar_angle, dust_concentration, grain_size):
+    def interpolate_all(self, solar_angle, lap_concentration, grain_size):
         """
         Interpolate spectrum using the c++ interpolator for all bands in self.bands.
         Derive the index values using swig C++ functions (about 5x more efficient than `self.interpolate_all_np_index`).
@@ -354,9 +354,9 @@ class LutInterpolator:
         solar_angle: double
             solar angle to interpolate the spectrum for.
             Units of `solar_angle` has to match the units in `self.solar_angles` (e.g. degrees).
-        dust_concentration: double
-            dust concentration to interpolate the spectrum for.
-            Units of `dust_concentration` has to match the units in `self.dust_concentrations` (e.g. ppm)
+        lap_concentration: double
+            LAP concentration to interpolate the spectrum for.
+            Units of `lap_concentration` has to match the units in `self.lap_concentrations` (e.g. ppm)
         grain_size: double
             grain size to interpolate the spectrum for.
             Units of `grain_size` has to match the units in `self.grain_sizes` (e.g. micro meters).
@@ -370,7 +370,7 @@ class LutInterpolator:
         >>> import spires_inversion
         >>> import numpy as np
         >>> interpolator = spires_inversion.LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')
-        >>> np.round(interpolator.interpolate_all(solar_angle=0, dust_concentration=0.1, grain_size=30), 6)
+        >>> np.round(interpolator.interpolate_all(solar_angle=0, lap_concentration=0.1, grain_size=30), 6)
         array([0.992369, 0.987902, 0.974649, 0.967563, 0.960422, 0.944987,
                0.153387, 0.186445, 0.921608])
 
@@ -379,8 +379,8 @@ class LutInterpolator:
         return spires_inversion.core.interpolate_all_array(self.reflectances,
                                                  self.bands,
                                                  self.solar_angles,
-                                                 self.dust_concentrations,
+                                                 self.lap_concentrations,
                                                  self.grain_sizes,
                                                  solar_angle,
-                                                 dust_concentration,
+                                                 lap_concentration,
                                                  grain_size)
