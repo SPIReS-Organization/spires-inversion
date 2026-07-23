@@ -20,7 +20,7 @@ _VARIABLE_ATTRS = {
         'units': 'ppm',
         'valid_range': [0, 10000],
     },
-    'grain_size': {
+    'grain_radius': {
         'long_name': 'Effective Snow Grain Radius',
         'units': 'μm',
         'valid_range': [10, 2000],
@@ -107,7 +107,7 @@ def _make_invert_chunk(max_eval, x0, algorithm):
 
 def _to_dataset(results):
     ds = results.to_dataset(dim='property').rename({
-        0: 'fsnow', 1: 'fshade', 2: 'lap_concentration', 3: 'grain_size',
+        0: 'fsnow', 1: 'fshade', 2: 'lap_concentration', 3: 'grain_radius',
     })
     for name, attrs in _VARIABLE_ATTRS.items():
         ds[name].attrs = attrs
@@ -128,7 +128,7 @@ def encode_results(ds, fill_value=-1, fsca_scale=100, fshade_scale=100,
     ----------
     ds : xarray.Dataset
         Output of ``speedy_invert_dask`` with variables ``fsnow``, ``fshade``,
-        ``lap_concentration``, ``grain_size`` in physical units (NaN for nodata).
+        ``lap_concentration``, ``grain_radius`` in physical units (NaN for nodata).
     fill_value : int, optional
         Sentinel for NaN pixels (default: -1).
     fsca_scale, fshade_scale : float, optional
@@ -136,7 +136,7 @@ def encode_results(ds, fill_value=-1, fsca_scale=100, fshade_scale=100,
     fraction_dtype : numpy dtype, optional
         Integer type for fsnow/fshade (default: ``np.int8``).
     concentration_dtype : numpy dtype, optional
-        Integer type for lap_concentration/grain_size (default: ``np.int16``).
+        Integer type for lap_concentration/grain_radius (default: ``np.int16``).
 
     Returns
     -------
@@ -150,7 +150,7 @@ def encode_results(ds, fill_value=-1, fsca_scale=100, fshade_scale=100,
         'fsnow': (fsca_scale, fraction_dtype),
         'fshade': (fshade_scale, fraction_dtype),
         'lap_concentration': (1, concentration_dtype),
-        'grain_size': (1, concentration_dtype),
+        'grain_radius': (1, concentration_dtype),
     }
     for name, (scale, dtype) in scales.items():
         if name not in encoded:
@@ -217,7 +217,7 @@ def speedy_invert_dask(spectra_targets, spectra_backgrounds, obs_solar_angles,
     Returns
     -------
     xarray.Dataset
-        Dataset with variables fsnow, fshade, lap_concentration, grain_size,
+        Dataset with variables fsnow, fshade, lap_concentration, grain_radius,
         preserving input coordinates and dimensions.
 
     See Also
