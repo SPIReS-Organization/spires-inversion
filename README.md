@@ -2,18 +2,18 @@
 
 [![PyPI version](https://badge.fury.io/py/spires.svg)](https://pypi.org/project/spires/)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18747284.svg)](https://doi.org/10.5281/zenodo.18747284)
-[![Documentation Status](https://readthedocs.org/projects/spipy/badge/?version=latest)](https://spipy.readthedocs.io/en/latest/?badge=latest)
+[![Documentation Status](https://readthedocs.org/projects/spires-inversion/badge/?version=latest)](https://spires-inversion.readthedocs.io/en/latest/?badge=latest)
 [![Build and Test](https://github.com/NiklasPhabian/SpiPy/workflows/Build%20and%20Test/badge.svg)](https://github.com/NiklasPhabian/SpiPy/actions)
 [![Python 3.9-3.14](https://img.shields.io/badge/python-3.9--3.14-blue.svg)](https://github.com/NiklasPhabian/SpiPy)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**[📦 View Source on GitHub](https://github.com/NiklasPhabian/SpiPy)** | **[📖 Documentation](https://spipy.readthedocs.io)** | **[🐛 Report Issues](https://github.com/NiklasPhabian/SpiPy/issues)**
+**[📦 View Source on GitHub](https://github.com/NiklasPhabian/SpiPy)** | **[📖 Documentation](https://spires-inversion.readthedocs.io)** | **[🐛 Report Issues](https://github.com/NiklasPhabian/SpiPy/issues)**
 
 `spires-inversion` is a Python implementation of [SPIRES](https://ieeexplore.ieee.org/document/9290428) (Snow Property Inversion From Remote Sensing), originally implemented in MATLAB ([SPIRES GitHub repository](https://github.com/edwardbair/SPIRES)). It is the core inversion engine of the [SPIReS package family](https://github.com/SPIReS-Organization) and imports as `spires_inversion`.
 
 ## Overview
 
-SPIRES retrieves snow properties (grain size, dust concentration, fractional snow-covered area) from satellite multispectral imagery by inverting reflectance spectra using lookup tables generated from Mie-scattering theory.
+SPIRES retrieves snow properties (grain radius, light-absorbing-particle concentration, snow endmember fraction) from satellite multispectral imagery by inverting reflectance spectra using lookup tables generated from Mie-scattering theory.
 
 **Key features:**
 - Hybrid Python/C++ implementation for performance (3000x speedup over pure Python)
@@ -92,7 +92,7 @@ spectrum_target = np.array([0.3424, 0.366, 0.3624, 0.3893,
 spectrum_background = np.array([0.0182, 0.0265, 0.0283, 0.0561,
                                 0.0954, 0.1204, 0.1249, 0.0789, 0.1406])
 
-fsca, fshade, dust, grain_size = spires_inversion.speedy_invert(
+fsnow, fshade, lap, grain_radius = spires_inversion.speedy_invert(
     spectrum_target=spectrum_target,
     spectrum_background=spectrum_background,
     solar_angle=55.73,
@@ -100,7 +100,7 @@ fsca, fshade, dust, grain_size = spires_inversion.speedy_invert(
 )
 ```
 
-See [Getting Started](https://spipy.readthedocs.io/en/latest/getting_started.html) for batch
+See [Getting Started](https://spires-inversion.readthedocs.io/en/latest/getting_started.html) for batch
 processing, xarray, and Dask-parallel workflows.
 
 ## Development

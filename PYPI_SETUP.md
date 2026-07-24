@@ -25,8 +25,8 @@ The repository includes a GitHub Actions workflow (`.github/workflows/publish-py
 3. Click "Add a new pending publisher"
 4. Fill in the form:
    - **PyPI Project Name**: `spires-inversion`
-   - **Owner**: `edwardbair`
-   - **Repository name**: `SpiPy`
+   - **Owner**: `SPIReS-Organization`
+   - **Repository name**: `spires-inversion`
    - **Workflow name**: `publish-pypi.yml`
    - **Environment name**: (leave empty)
 5. Click "Add"
@@ -41,7 +41,7 @@ If you prefer using an API token instead of trusted publishing:
 
 1. Go to [https://pypi.org/manage/account/token/](https://pypi.org/manage/account/token/)
 2. Click "Add API token"
-3. Name it (e.g., "GitHub Actions - SpiPy")
+3. Name it (e.g., "GitHub Actions - spires-inversion")
 4. Scope: "Project: spires-inversion" (or "Entire account" if the project doesn't exist yet)
 5. Copy the token (starts with `pypi-`)
 
@@ -86,11 +86,11 @@ Once setup is complete, publishing is automatic:
 1. **Create a git tag:**
    ```bash
    git tag v0.2.2
-   git push upstream v0.2.2
+   git push origin v0.2.2
    ```
 
 2. **Create a GitHub Release:**
-   - Go to [https://github.com/edwardbair/SpiPy/releases/new](https://github.com/edwardbair/SpiPy/releases/new)
+   - Go to [https://github.com/SPIReS-Organization/spires-inversion/releases/new](https://github.com/SPIReS-Organization/spires-inversion/releases/new)
    - Choose your tag (e.g., `v0.2.2`)
    - Fill in release notes
    - Click "Publish release"
@@ -100,7 +100,7 @@ Once setup is complete, publishing is automatic:
    - Builds wheels for Linux and macOS
    - Builds source distribution
    - Publishes to PyPI
-   - Check progress at: [https://github.com/edwardbair/SpiPy/actions](https://github.com/edwardbair/SpiPy/actions)
+   - Check progress at: [https://github.com/SPIReS-Organization/spires-inversion/actions](https://github.com/SPIReS-Organization/spires-inversion/actions)
 
 4. **Verify publication:**
    - Package appears at: [https://pypi.org/project/spires-inversion/](https://pypi.org/project/spires-inversion/)
@@ -122,7 +122,7 @@ The workflow uses:
 - **nlopt**: Required C++ dependency for optimization
 
 Wheels are built for:
-- Python 3.9, 3.10, 3.11, 3.12
+- Python 3.9, 3.10, 3.11, 3.12, 3.13, 3.14
 - Linux (manylinux)
 - macOS (ARM64 and x86_64)
 

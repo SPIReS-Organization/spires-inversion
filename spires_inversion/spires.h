@@ -10,40 +10,40 @@
 // vector stay double. float32 is a property of the storage signature, not a
 // name suffix.
 
-double interpolate_idx(float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
-                       int band_idx, double solar_angle_idx, double dust_concentration_idx, double grain_size_idx);
+double interpolate_idx(float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_lap_concentrations, int n_lut_grain_sizes,
+                       int band_idx, double solar_angle_idx, double lap_concentration_idx, double grain_size_idx);
 
 
-double interpolate(float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
+double interpolate(float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_lap_concentrations, int n_lut_grain_sizes,
                    double* lut_bands, int len_lut_bands,
                    double* lut_solar_angles, int len_lut_solar_angles,
-                   double* lut_dust_concentrations, int len_lut_dust_concentrations,
+                   double* lut_lap_concentrations, int len_lut_lap_concentrations,
                    double* lut_grain_sizes, int len_lut_grain_sizes,
                    int band,
                    double solar_angle,
-                   double dust_concentration,
+                   double lap_concentration,
                    double grain_size);
 
-std::vector<double> interpolate_all_idx(float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
+std::vector<double> interpolate_all_idx(float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_lap_concentrations, int n_lut_grain_sizes,
                                         double solar_angle, double dust, double grain_size);
 
-std::vector<double> interpolate_all(float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
+std::vector<double> interpolate_all(float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_lap_concentrations, int n_lut_grain_sizes,
                                     double* lut_bands, int len_lut_bands,
                                     double* lut_solar_angles, int len_lut_solar_angles,
-                                    double* lut_dust_concentrations, int len_lut_dust_concentrations,
+                                    double* lut_lap_concentrations, int len_lut_lap_concentrations,
                                     double* lut_grain_sizes, int len_lut_grain_sizes,
                                     double solar_angle,
                                     double dust_size,
                                     double grain_size);
 
 
-double* interpolate_all_array(float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
+double* interpolate_all_array(float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_lap_concentrations, int n_lut_grain_sizes,
                               double* lut_bands, int len_lut_bands,
                               double* lut_solar_angles, int len_lut_solar_angles,
-                              double* lut_dust_concentrations, int len_lut_dust_concentrations,
+                              double* lut_lap_concentrations, int len_lut_lap_concentrations,
                               double* lut_grain_sizes, int len_lut_grain_sizes,
                               double solar_angle,
-                              double dust_concentration,
+                              double lap_concentration,
                               double grain_size);
 
 double spectrum_difference(const std::vector<double>& x,
@@ -53,9 +53,9 @@ double spectrum_difference(const std::vector<double>& x,
                            double solar_angle,
                            double* lut_bands, int len_lut_bands,
                            double* lut_solar_angles, int len_lut_solar_angles,
-                           double* lut_dust_concentrations, int len_lut_dust_concentrations,
+                           double* lut_lap_concentrations, int len_lut_lap_concentrations,
                            double* lut_grain_sizes, int len_lut_grain_sizes,
-                           float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes);
+                           float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_lap_concentrations, int n_lut_grain_sizes);
 
 double spectrum_difference_scaled(const std::vector<double> &x,
                                   float* spectrum_background, int len_background,
@@ -64,9 +64,9 @@ double spectrum_difference_scaled(const std::vector<double> &x,
                                   double solar_angle,
                                   double* lut_bands, int len_lut_bands,
                                   double* lut_solar_angles, int len_lut_solar_angles,
-                                  double* lut_dust_concentrations, int len_lut_dust_concentrations,
+                                  double* lut_lap_concentrations, int len_lut_lap_concentrations,
                                   double* lut_grain_sizes, int len_lut_grain_sizes,
-                                  float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes);
+                                  float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_lap_concentrations, int n_lut_grain_sizes);
 
 
 double spectrum_difference_softmax(const std::vector<double>& z,
@@ -76,9 +76,9 @@ double spectrum_difference_softmax(const std::vector<double>& z,
                                    double solar_angle,
                                    double* lut_bands, int len_lut_bands,
                                    double* lut_solar_angles, int len_lut_solar_angles,
-                                   double* lut_dust_concentrations, int len_lut_dust_concentrations,
+                                   double* lut_lap_concentrations, int len_lut_lap_concentrations,
                                    double* lut_grain_sizes, int len_lut_grain_sizes,
-                                   float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes);
+                                   float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_lap_concentrations, int n_lut_grain_sizes);
 
 
 double spectrum_difference_hybrid(const std::vector<double>& y,
@@ -88,9 +88,9 @@ double spectrum_difference_hybrid(const std::vector<double>& y,
                                   double solar_angle,
                                   double* lut_bands, int len_lut_bands,
                                   double* lut_solar_angles, int len_lut_solar_angles,
-                                  double* lut_dust_concentrations, int len_lut_dust_concentrations,
+                                  double* lut_lap_concentrations, int len_lut_lap_concentrations,
                                   double* lut_grain_sizes, int len_lut_grain_sizes,
-                                  float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes);
+                                  float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_lap_concentrations, int n_lut_grain_sizes);
 
 
 std::vector<double> z_to_x(const std::vector<double>& z,
@@ -113,9 +113,9 @@ std::vector<double>  invert(float* spectrum_background, int len_background,
                            double solar_angle,
                            double* lut_bands, int len_lut_bands,
                            double* lut_solar_angles, int len_lut_solar_angles,
-                           double* lut_dust_concentrations, int len_lut_dust_concentrations,
+                           double* lut_lap_concentrations, int len_lut_lap_concentrations,
                            double* lut_grain_sizes, int len_lut_grain_sizes,
-                           float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
+                           float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_lap_concentrations, int n_lut_grain_sizes,
                            int max_eval,
                            std::vector<double> x0,
                            int algorithm);
@@ -134,9 +134,9 @@ void invert_array1d(float* spectra_backgrounds, int n_obs_backgrounds, int n_ban
                     double* obs_solar_angles, int n_obs_solar_angles,
                     double* lut_bands, int len_lut_bands,
                     double* lut_solar_angles, int len_lut_solar_angles,
-                    double* lut_dust_concentrations, int len_lut_dust_concentrations,
+                    double* lut_lap_concentrations, int len_lut_lap_concentrations,
                     double* lut_grain_sizes, int len_lut_grain_sizes,
-                    float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
+                    float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_lap_concentrations, int n_lut_grain_sizes,
                     double* results, int n_obs, int n_results,
                     int max_eval,
                     std::vector<double> x0,
@@ -149,9 +149,9 @@ void invert_array2d(float* spectra_backgrounds, int n_background_y, int n_backgr
                     double* obs_solar_angles, int n_obs_solar_y, int n_obs_solar_x,
                     double* lut_bands, int len_lut_bands,
                     double* lut_solar_angles, int len_lut_solar_angles,
-                    double* lut_dust_concentrations, int len_lut_dust_concentrations,
+                    double* lut_lap_concentrations, int len_lut_lap_concentrations,
                     double* lut_grain_sizes, int len_lut_grain_sizes,
-                    float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes,
+                    float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_lap_concentrations, int n_lut_grain_sizes,
                     double* results, int n_y, int n_x, int n_results,
                     int max_eval,
                     std::vector<double> x0,

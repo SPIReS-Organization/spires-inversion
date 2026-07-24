@@ -48,7 +48,7 @@ namespace std {
    plain name. The LUT float32 typemap serves the single-pixel interpolate_* /
    invert AND the batch entry points. */
 %apply (float* IN_ARRAY4, int DIM1, int DIM2, int DIM3, int DIM4) {
-    (float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_dust_concentrations, int n_lut_grain_sizes)
+    (float* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_lap_concentrations, int n_lut_grain_sizes)
 };
 
 %apply(float* IN_ARRAY3, int DIM1, int DIM2, int DIM3){
@@ -71,7 +71,7 @@ namespace std {
 %apply (double* IN_ARRAY1, int DIM1) {
     (double* spectrum_shade, int len_shade),
     (double* lut_grain_sizes, int len_lut_grain_sizes),
-    (double* lut_dust_concentrations, int len_lut_dust_concentrations),
+    (double* lut_lap_concentrations, int len_lut_lap_concentrations),
     (double* lut_solar_angles, int len_lut_solar_angles),
     (double* lut_bands, int len_lut_bands),
     (double* obs_solar_angles, int n_obs_solar_angles)

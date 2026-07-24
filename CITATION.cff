@@ -11,10 +11,17 @@ authors:
     given-names: Niklas
     affiliation: "Leidos, Inc."
     orcid: "https://orcid.org/0000-0001-5037-6266"
+  - family-names: Palomaki
+    given-names: Ross
+    affiliation: "Institute of Arctic and Alpine Research (INSTAAR), University of Colorado Boulder"
+    orcid: "https://orcid.org/0000-0002-3304-9914"
+  - family-names: Wilder
+    given-names: Brent
+    affiliation: "NASA Jet Propulsion Laboratory"
 version: 0.2.8
 date-released: 2026-02-23
 repository-code: "https://github.com/NiklasPhabian/SpiPy"
-url: "https://spipy.readthedocs.io"
+url: "https://spires-inversion.readthedocs.io"
 license: MIT
 doi: 10.5281/zenodo.18747284
 keywords:

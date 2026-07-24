@@ -54,7 +54,7 @@ def test_thread_pool_results_match_serial():
         threaded = list(ex.map(_invert_one, range(4)))
     for s, t in zip(serial, threaded):
         np.testing.assert_array_equal(s, t)
-    # Sanity: results are physically plausible (fsca/fshade in [0,1]).
+    # Sanity: results are physically plausible (fsnow/fshade in [0,1]).
     r = threaded[0]
     assert np.all((r[..., 0] >= 0) & (r[..., 0] <= 1))
     assert np.all((r[..., 1] >= 0) & (r[..., 1] <= 1))
