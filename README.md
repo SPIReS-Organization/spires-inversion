@@ -100,8 +100,63 @@ fsnow, fshade, lap, grain_radius = spires_inversion.speedy_invert(
 )
 ```
 
+### Standardized scene inversion
+
+The package-family object path accepts a prepared
+`spires_contract.SpiresData` scene and a canonical NetCDF reflectance LUT:
+
+```python
+import spires_inversion
+import spires_io
+
+data = spires_io.load("scene_config.json")
+
+# Optional approximation step. Complete canonical cluster variables trigger
+# clustered inversion automatically.
+data = spires_io.cluster(
+    data,
+    features=("reflectance",),
+    reflectance_tol=0.02,
+    apply_valid_inversion_mask=True,
+)
+
+inverted = spires_inversion.invert(
+    data,
+    lut="reflectance_lut.nc",
+    algorithm=6,
+    max_eval=100,
+    apply_valid_inversion_mask=True,
+    n_workers=1,
+)
+results = inverted.results
+```
+
+Both clustered and direct execution return the same canonical float32
+variables: `fsnow`, `fshade`, `lap_concentration`, and `grain_radius`.
+`cluster_label == -1` and other ineligible pixels remain NaN. Cluster mask
+policy must match the requested inversion policy; otherwise the scene must be
+reclustered.
+
+`n_workers` controls in-process thread chunking for this eager object path.
+It defaults to one to avoid oversubscribing Dask or batch workers. Standalone
+single-scene jobs may opt into additional threads explicitly.
+
+On the Phase 3 VIIRS benchmark, reflectance tolerances `0.02` and `0.05`
+provided 1.53× and 2.76× public-route end-to-end speedups, respectively.
+`0.02` was consistently more accurate, but both settings produced substantial
+upper-tail differences for LAP concentration and grain radius. Clustering is
+therefore an explicit approximation choice; the package does not claim a
+universal accuracy-preserving tolerance.
+
 See [Getting Started](https://spires-inversion.readthedocs.io/en/latest/getting_started.html) for batch
 processing, xarray, and Dask-parallel workflows.
+
+The lower-level `speedy_invert_dask()` API preserves lazy arrays and supports
+time stacks. It performs lazy-safe schema validation immediately; after
+materialization, validate each single-scene slice with
+`spires_contract.validate_results()`. `encode_results()` creates an integer
+storage representation only and must not be assigned to `SpiresData.results`
+or passed directly to scientific postprocessing.
 
 ## Development
 

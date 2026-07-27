@@ -1,6 +1,7 @@
 """Reflectance-LUT loading and normalization for standardized inversion."""
 
 from os import PathLike
+from pathlib import Path
 
 import numpy as np
 import xarray as xr
@@ -59,7 +60,7 @@ def load_matlab_reflectance_lut(
 
     legacy = LutInterpolator(lut_file=path)
     lap_values = _lap_concentration_to_ppm(
-        legacy.dust_concentrations, lap_concentration_units
+        legacy.lap_concentrations, lap_concentration_units
     )
     grain_radius = _require_micrometres(
         legacy.grain_sizes, grain_radius_units
@@ -95,6 +96,12 @@ def load_matlab_reflectance_lut(
                     ),
                 },
             )
+        }
+    )
+    dataset.attrs.update(
+        {
+            "reflectance_lut_identity": Path(path).name,
+            "reflectance_lut_normalization": "legacy_matlab_normalized",
         }
     )
     validate_reflectance_lut(dataset, expected_lap_type=lap_type)

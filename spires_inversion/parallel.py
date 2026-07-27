@@ -1,30 +1,12 @@
 """Dask-parallel inversion of snow reflectance spectra."""
+import warnings
+
 import numpy as np
 
 from spires_contract import conventions as _c
 from spires_contract import validate_results
 from spires_inversion.invert import speedy_invert_array2d
-
-
-# Result-variable attrs sourced from the results contract so long_name/units
-# cannot drift from what validate_results enforces. valid_range is retained as
-# advisory metadata (not part of the contract).
-_VALID_RANGES = {
-    'fsnow': [0, 1],
-    'fshade': [0, 1],
-    'lap_concentration': [0, 10000],
-    'grain_radius': [10, 2000],
-}
-_VARIABLE_ATTRS = {
-    name: {
-        'long_name': _c.RESULT_LONG_NAMES[name],
-        'units': _c.RESULT_UNITS[name],
-        'valid_range': _VALID_RANGES[name],
-    }
-    for name in _c.RESULT_VARIABLES
-}
-# lap_concentration additionally carries the LAP species (contract-required).
-_VARIABLE_ATTRS['lap_concentration']['lap_type'] = _c.SUPPORTED_LAP_TYPES[0]
+from spires_inversion.results import build_results, validate_result_structure
 
 
 def _import_dask():
@@ -105,19 +87,16 @@ def _make_invert_chunk(max_eval, x0, algorithm):
 
 
 def _to_dataset(results):
-    ds = results.to_dataset(dim='property').rename({
-        0: 'fsnow', 1: 'fshade', 2: 'lap_concentration', 3: 'grain_radius',
-    })
-    for name, attrs in _VARIABLE_ATTRS.items():
-        # Results cross the postprocess boundary as float32 (contract dtype);
-        # the C++ kernel computes in double and returns float64, so cast here.
-        ds[name] = ds[name].astype(np.float32)
-        ds[name].attrs = dict(attrs)
-    return ds
+    return build_results(
+        results,
+        lap_type=_c.SUPPORTED_LAP_TYPES[0],
+        grain_output="grain_radius",
+    )
 
 
-def encode_results(ds, fill_value=-1, fsca_scale=100, fshade_scale=100,
-                   fraction_dtype=np.int8, concentration_dtype=np.int16):
+def encode_results(ds, fill_value=-1, fsnow_scale=100, fshade_scale=100,
+                   fraction_dtype=np.int8, concentration_dtype=np.int16,
+                   *, fsca_scale=None):
     """
     Encode an inversion result Dataset for compact storage.
 
@@ -133,7 +112,7 @@ def encode_results(ds, fill_value=-1, fsca_scale=100, fshade_scale=100,
         ``lap_concentration``, ``grain_radius`` in physical units (NaN for nodata).
     fill_value : int, optional
         Sentinel for NaN pixels (default: -1).
-    fsca_scale, fshade_scale : float, optional
+    fsnow_scale, fshade_scale : float, optional
         Multiplier applied before integer cast (default: 100, i.e. percent).
     fraction_dtype : numpy dtype, optional
         Integer type for fsnow/fshade (default: ``np.int8``).
@@ -144,12 +123,27 @@ def encode_results(ds, fill_value=-1, fsca_scale=100, fshade_scale=100,
     -------
     xarray.Dataset
         Dataset with the same variable names, encoded for storage.
+
+    Notes
+    -----
+    This is a storage-only representation, not a canonical in-memory result
+    Dataset. ``fsca_scale`` is a deprecated alias for ``fsnow_scale``.
     """
     import xarray
 
+    if fsca_scale is not None:
+        if fsnow_scale != 100:
+            raise TypeError("use only one of fsnow_scale or deprecated fsca_scale")
+        warnings.warn(
+            "fsca_scale is deprecated; use fsnow_scale",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        fsnow_scale = fsca_scale
+
     encoded = ds.copy()
     scales = {
-        'fsnow': (fsca_scale, fraction_dtype),
+        'fsnow': (fsnow_scale, fraction_dtype),
         'fshade': (fshade_scale, fraction_dtype),
         'lap_concentration': (1, concentration_dtype),
         'grain_radius': (1, concentration_dtype),
@@ -266,11 +260,10 @@ def speedy_invert_dask(spectra_targets, spectra_backgrounds, obs_solar_angles,
 
     ds = _to_dataset(results)
 
-    # Validate at the output boundary, but only when the result is eager
-    # (numpy-backed): validate_results reads .values and would force a
-    # .compute() on a lazy/chunked result, defeating dask parallelism. The
-    # contract also targets single-scene (y, x) results, so skip time stacks.
-    # Lazy or time-stacked callers validate per-scene after .compute().
+    # Every result receives lazy-safe structural validation. Full contract
+    # validation reads values, so it remains limited to eager single scenes;
+    # lazy or time-stacked callers validate each scene after materialization.
+    validate_result_structure(ds)
     if _is_eager_single_scene(ds):
         validate_results(ds)
 

@@ -84,6 +84,52 @@ print(f"Grain radius: {grain_radius:.1f} μm")
 print(f"LAP concentration: {lap:.1f} ppm")
 ```
 
+### Canonical `SpiresData` workflow
+
+For package-family workflows, prepare a `SpiresData` object with `spires-io`
+and pass a canonical NetCDF reflectance LUT to the high-level entry point:
+
+```python
+import spires_inversion
+import spires_io
+
+data = spires_io.load("scene_config.json")
+
+# Optional: clustering emits labels, counts, and inversion representatives.
+data = spires_io.cluster(
+    data,
+    features=("reflectance",),
+    reflectance_tol=0.02,
+    apply_valid_inversion_mask=True,
+)
+
+data = spires_inversion.invert(
+    data,
+    lut="reflectance_lut.nc",
+    algorithm=6,
+    max_eval=100,
+    apply_valid_inversion_mask=True,
+    n_workers=1,
+)
+```
+
+The function detects a complete canonical cluster schema automatically.
+Partial cluster state is rejected, excluded labels (`-1`) remain NaN, and
+clustered inputs must record the same effective valid-mask policy requested by
+inversion. Direct and clustered paths emit `fsnow`, `fshade`,
+`lap_concentration`, and `grain_radius` as canonical float32 `(y, x)` arrays.
+
+The eager object path owns optional in-process threading through `n_workers`.
+It defaults to one; use a larger value for a standalone single-scene job, but
+keep it at one inside Dask or batch workers to avoid nested parallelism.
+
+Clustering is an approximation rather than an accuracy-neutral optimization.
+The Phase 3 VIIRS benchmark found a 1.53× end-to-end speedup at reflectance
+tolerance `0.02` and 2.76× at `0.05`. The tighter tolerance was consistently
+more accurate, but both had substantial upper-tail LAP and grain-radius
+differences. Select a tolerance explicitly for the workflow rather than
+treating either value as a universal default.
+
 ### Batch Processing
 
 For processing multiple pixels or entire images, use the array-based functions:
@@ -141,6 +187,7 @@ copy per worker process.
 ```python
 import xarray as xr
 from dask.distributed import Client
+from spires_contract import validate_results
 
 import spires_inversion
 
@@ -162,10 +209,20 @@ with Client(n_workers=4, threads_per_worker=4) as client:
         client=client,
     )
 
-    # Encode for compact storage (NaN -> fill value, fractions scaled to int)
-    encoded = spires_inversion.encode_results(ds)
+    # The lazy result has already received non-computing structural validation.
+    computed = ds.compute()
+    for time_index in range(computed.sizes["time"]):
+        validate_results(computed.isel(time=time_index, drop=True))
+
+    # Explicit storage representation only; do not use it for postprocessing.
+    encoded = spires_inversion.encode_results(computed)
     encoded.to_netcdf('inversion_results.nc')
 ```
+
+Eager single-scene Dask results receive full numerical contract validation
+before return. Lazy results and time stacks receive schema, dtype, coordinate,
+and metadata validation without triggering computation; full numerical
+validation is performed per eager `(y, x)` scene after materialization.
 
 See `examples/05_sentinel_snow_inversion.ipynb` for a complete dask workflow.
 

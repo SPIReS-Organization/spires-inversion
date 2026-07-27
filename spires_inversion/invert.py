@@ -1,5 +1,10 @@
 import spires_inversion.interpolator
 import spires_inversion.core
+from concurrent.futures import ThreadPoolExecutor
+from importlib.metadata import PackageNotFoundError, version
+from os import PathLike
+from pathlib import Path
+
 from spires_contract.spectra import (
     validate_target_spectra,
     validate_background_spectra,
@@ -9,9 +14,11 @@ from spires_contract.lut import validate_lut
 from spires_contract import (
     ContractError,
     SpiresData,
+    clusters_present,
     validate_for_inversion,
     validate_results,
 )
+from spires_contract import conventions as contract_conventions
 from spires_inversion.lut import kernel_lut_arrays, load_reflectance_lut
 from spires_inversion.results import build_results
 import numpy as np
@@ -25,72 +32,322 @@ def invert(
     max_eval=100,
     algorithm=6,
     apply_valid_inversion_mask=True,
+    n_workers=1,
 ):
-    """Invert one full-resolution, contract-valid :class:`SpiresData` scene.
+    """Invert one contract-valid full-resolution or clustered scene.
 
-    The optimizer is called only for pixels whose required inputs are finite
-    and, by default, whose optional ``valid_inversion_mask`` is true. Results
-    are scattered back to ``(y, x)`` and all ineligible pixels remain NaN.
+    Clustered scenes are detected from the canonical cluster variables and
+    inverted through their representative spectra. Both execution paths return
+    canonical ``(y, x)`` results with ineligible pixels left as NaN.
+
+    Parameters
+    ----------
+    data : spires_contract.SpiresData
+        Prepared single scene. A complete canonical cluster schema selects
+        clustered execution automatically.
+    lut : xarray.Dataset or path-like
+        Canonical NetCDF reflectance LUT or an already normalized in-memory
+        Dataset.
+    max_eval : int, optional
+        Maximum objective evaluations per pixel or cluster representative.
+    algorithm : int, optional
+        Numerical-kernel algorithm code. Algorithm 6 is the object-path default.
+    apply_valid_inversion_mask : bool, optional
+        Apply ``valid_inversion_mask`` when it is present. Clustered inputs must
+        have been formed using the same effective policy.
+    n_workers : int, optional
+        Number of in-process thread chunks used for row inversion. The default
+        of one avoids nested parallelism; batch or Dask workers should normally
+        retain that default.
+
+    Returns
+    -------
+    spires_contract.SpiresData
+        Replacement object carrying canonical float32 inversion results.
     """
     validate_for_inversion(data)
     if not isinstance(apply_valid_inversion_mask, (bool, np.bool_)):
         raise TypeError("apply_valid_inversion_mask must be boolean")
+    if (
+        not isinstance(n_workers, (int, np.integer))
+        or isinstance(n_workers, (bool, np.bool_))
+        or n_workers < 1
+    ):
+        raise ValueError("n_workers must be a positive integer")
+    n_workers = int(n_workers)
 
     reflectance_lut = load_reflectance_lut(lut, expected_lap_type="dust")
     _validate_scene_lut_bands(data.scene["reflectance"], reflectance_lut)
     lut_arrays = kernel_lut_arrays(reflectance_lut)
 
     target = data.scene["reflectance"]
-    background = data.background
-    solar_zenith = data.scene["solar_zenith"]
-    finite_inputs = (
-        np.isfinite(target.values).all(axis=-1)
-        & np.isfinite(background.values).all(axis=-1)
-        & np.isfinite(solar_zenith.values)
-    )
-    eligible = finite_inputs
     valid_mask = data.scene.get("valid_inversion_mask")
-    if apply_valid_inversion_mask and valid_mask is not None:
-        eligible = eligible & np.asarray(valid_mask.values, dtype=bool)
+    mask_applied = bool(apply_valid_inversion_mask and valid_mask is not None)
+
+    if clusters_present(data):
+        label = data.scene[contract_conventions.CLUSTER_LABEL_VARIABLE]
+        clustered_mask_policy = bool(
+            label.attrs[contract_conventions.CLUSTER_MASK_POLICY_ATTR]
+        )
+        if clustered_mask_policy != mask_applied:
+            raise ContractError(
+                "clustered input was built with "
+                f"valid_inversion_mask_applied={clustered_mask_policy}, but "
+                f"inversion requires {mask_applied}; recluster the scene with "
+                "the requested mask policy"
+            )
+        kernel_results, eligible = _invert_clustered_scene(
+            data,
+            lut_arrays=lut_arrays,
+            max_eval=max_eval,
+            algorithm=algorithm,
+            n_workers=n_workers,
+        )
+    else:
+        kernel_results, eligible = _invert_full_resolution_scene(
+            data,
+            lut_arrays=lut_arrays,
+            max_eval=max_eval,
+            algorithm=algorithm,
+            mask_applied=mask_applied,
+            n_workers=n_workers,
+        )
 
     eligibility_mask = target.isel(band=0, drop=True).copy(
         data=np.asarray(eligible, dtype=bool)
     )
     eligibility_mask.name = "effective_inversion_eligibility"
 
-    kernel_results = np.full(target.shape[:2] + (4,), np.nan, dtype=np.float64)
-    if np.any(eligible):
-        initial = np.asarray(
-            [
-                0.5,
-                0.05,
-                _within_axis(10.0, lut_arrays["lap_concentrations"]),
-                _within_axis(np.sqrt(250.0), lut_arrays["sqrt_grain_radii"]),
-            ],
-            dtype=np.float64,
-        )
-        inverted = speedy_invert_array1d(
-            spectra_targets=np.ascontiguousarray(target.values[eligible]),
-            spectra_backgrounds=np.ascontiguousarray(background.values[eligible]),
-            obs_solar_angles=np.ascontiguousarray(solar_zenith.values[eligible]),
-            bands=lut_arrays["bands"],
-            solar_angles=lut_arrays["solar_angles"],
-            dust_concentrations=lut_arrays["lap_concentrations"],
-            grain_sizes=lut_arrays["sqrt_grain_radii"],
-            reflectances=lut_arrays["reflectances"],
-            max_eval=max_eval,
-            x0=initial,
-            algorithm=algorithm,
-        )
-        kernel_results[eligible] = inverted
-
     results = build_results(kernel_results, eligibility_mask, lap_type="dust")
+    results.attrs.update(
+        _result_provenance(
+            data,
+            lut_source=lut,
+            reflectance_lut=reflectance_lut,
+            algorithm=algorithm,
+            max_eval=max_eval,
+            mask_applied=mask_applied,
+            clustered=clusters_present(data),
+        )
+    )
     validate_results(
         results,
         scene=data.scene,
         eligibility_mask=eligibility_mask,
     )
     return data.assign_results(results)
+
+
+def _result_provenance(
+    data,
+    *,
+    lut_source,
+    reflectance_lut,
+    algorithm,
+    max_eval,
+    mask_applied,
+    clustered,
+):
+    valid_mask = data.scene.get(contract_conventions.VALID_INVERSION_MASK_VARIABLE)
+    identity, normalization = _lut_provenance(lut_source, reflectance_lut)
+    attrs = {
+        "spires_contract_version": _distribution_version("spires-contract"),
+        "spires_inversion_version": _distribution_version("spires-inversion"),
+        "inversion_algorithm": int(algorithm),
+        "inversion_max_eval": int(max_eval),
+        "valid_inversion_mask_available": int(valid_mask is not None),
+        "valid_inversion_mask_applied": int(mask_applied),
+        "valid_inversion_mask_source": (
+            "scene.valid_inversion_mask" if valid_mask is not None else "absent"
+        ),
+        "clustered_inversion": int(clustered),
+        "reflectance_lut_identity": identity,
+        "reflectance_lut_normalization": normalization,
+    }
+    if clustered:
+        label_attrs = data.scene[
+            contract_conventions.CLUSTER_LABEL_VARIABLE
+        ].attrs
+        attrs["clustering_features"] = label_attrs.get("features", "")
+        attrs["clustering_representative_method"] = label_attrs.get(
+            "representative_method",
+            "",
+        )
+        for name, value in label_attrs.items():
+            if name.endswith("_tol"):
+                attrs[f"clustering_{name}"] = value
+    return attrs
+
+
+def _lut_provenance(source, dataset):
+    if isinstance(source, (str, PathLike)):
+        identity = Path(source).name
+    else:
+        encoded_source = dataset.encoding.get("source")
+        identity = dataset.attrs.get("reflectance_lut_identity")
+        if identity is None and encoded_source:
+            identity = Path(encoded_source).name
+        if identity is None:
+            identity = "in_memory"
+    normalization = dataset.attrs.get(
+        "reflectance_lut_normalization",
+        "canonical_netcdf",
+    )
+    return str(identity), str(normalization)
+
+
+def _distribution_version(distribution):
+    try:
+        return version(distribution)
+    except PackageNotFoundError:
+        return "unknown"
+
+
+def _invert_full_resolution_scene(
+    data,
+    *,
+    lut_arrays,
+    max_eval,
+    algorithm,
+    mask_applied,
+    n_workers,
+):
+    target = data.scene["reflectance"]
+    background = data.background
+    solar_zenith = data.scene["solar_zenith"]
+    eligible = (
+        np.isfinite(target.values).all(axis=-1)
+        & np.isfinite(background.values).all(axis=-1)
+        & np.isfinite(solar_zenith.values)
+    )
+    if mask_applied:
+        eligible &= np.asarray(
+            data.scene["valid_inversion_mask"].values,
+            dtype=bool,
+        )
+
+    kernel_results = np.full(target.shape[:2] + (4,), np.nan, dtype=np.float64)
+    if np.any(eligible):
+        kernel_results[eligible] = _invert_rows(
+            target.values[eligible],
+            background.values[eligible],
+            solar_zenith.values[eligible],
+            lut_arrays=lut_arrays,
+            max_eval=max_eval,
+            algorithm=algorithm,
+            n_workers=n_workers,
+        )
+    return kernel_results, eligible
+
+
+def _invert_clustered_scene(
+    data,
+    *,
+    lut_arrays,
+    max_eval,
+    algorithm,
+    n_workers,
+):
+    scene = data.scene
+    label = np.asarray(
+        scene[contract_conventions.CLUSTER_LABEL_VARIABLE].values
+    )
+    eligible = label >= 0
+    kernel_results = np.full(label.shape + (4,), np.nan, dtype=np.float64)
+
+    n_clusters = scene.sizes[contract_conventions.CLUSTER_DIM]
+    if n_clusters:
+        cluster_results = _invert_rows(
+            scene["cluster_representative_reflectance"].values,
+            scene["cluster_representative_background"].values,
+            scene["cluster_representative_solar_zenith"].values,
+            lut_arrays=lut_arrays,
+            max_eval=max_eval,
+            algorithm=algorithm,
+            n_workers=n_workers,
+        )
+        kernel_results[eligible] = cluster_results[label[eligible]]
+    return kernel_results, eligible
+
+
+def _invert_rows(
+    spectra_targets,
+    spectra_backgrounds,
+    obs_solar_angles,
+    *,
+    lut_arrays,
+    max_eval,
+    algorithm,
+    n_workers,
+):
+    """Invert nonempty rows serially or in balanced contiguous thread chunks."""
+    initial = np.asarray(
+        [
+            0.5,
+            0.05,
+            _within_axis(10.0, lut_arrays["lap_concentrations"]),
+            _within_axis(np.sqrt(250.0), lut_arrays["sqrt_grain_radii"]),
+        ],
+        dtype=np.float64,
+    )
+    n_rows = spectra_targets.shape[0]
+    worker_count = min(n_workers, n_rows)
+    if worker_count == 1:
+        return _invert_row_chunk(
+            spectra_targets,
+            spectra_backgrounds,
+            obs_solar_angles,
+            lut_arrays=lut_arrays,
+            max_eval=max_eval,
+            algorithm=algorithm,
+            initial=initial,
+        )
+
+    boundaries = np.linspace(0, n_rows, worker_count + 1, dtype=np.int64)
+    chunks = [
+        slice(int(boundaries[index]), int(boundaries[index + 1]))
+        for index in range(worker_count)
+    ]
+    with ThreadPoolExecutor(max_workers=worker_count) as executor:
+        futures = [
+            executor.submit(
+                _invert_row_chunk,
+                spectra_targets[chunk],
+                spectra_backgrounds[chunk],
+                obs_solar_angles[chunk],
+                lut_arrays=lut_arrays,
+                max_eval=max_eval,
+                algorithm=algorithm,
+                initial=initial,
+            )
+            for chunk in chunks
+        ]
+        return np.concatenate([future.result() for future in futures], axis=0)
+
+
+def _invert_row_chunk(
+    spectra_targets,
+    spectra_backgrounds,
+    obs_solar_angles,
+    *,
+    lut_arrays,
+    max_eval,
+    algorithm,
+    initial,
+):
+    return speedy_invert_array1d(
+        spectra_targets=np.ascontiguousarray(spectra_targets),
+        spectra_backgrounds=np.ascontiguousarray(spectra_backgrounds),
+        obs_solar_angles=np.ascontiguousarray(obs_solar_angles),
+        bands=lut_arrays["bands"],
+        solar_angles=lut_arrays["solar_angles"],
+        lap_concentrations=lut_arrays["lap_concentrations"],
+        grain_sizes=lut_arrays["sqrt_grain_radii"],
+        reflectances=lut_arrays["reflectances"],
+        max_eval=max_eval,
+        x0=initial,
+        algorithm=algorithm,
+    )
 
 
 def _within_axis(value, axis):
@@ -205,13 +462,15 @@ def speedy_invert(spectrum_target, spectrum_background, solar_angle, spectrum_sh
         Default is [0.5, 0.05, 10, 250].
     algorithm : int, optional
         Optimization algorithm to use (default: 2).
-        1 = LN_COBYLA (constrained, derivative-free),
-        2 = LN_NELDERMEAD (unconstrained simplex; ignores box bounds),
-        3 = LD_SLSQP (gradient-based; degraded — uses NLopt's finite-diff fallback),
-        4 = LN_NELDERMEAD on softmax-reparameterized cost (full softmax),
-        5 = LN_BOBYQA on softmax-reparameterized cost (quadratic-model variant),
-        6 = LN_NELDERMEAD on hybrid: softmax for fractions, clip-on-entry for
-            LAP/grain (recommended for real imagery).
+
+        - ``1``: LN_COBYLA (constrained, derivative-free).
+        - ``2``: LN_NELDERMEAD (unconstrained simplex; ignores box bounds).
+        - ``3``: LD_SLSQP (gradient-based; finite-difference fallback).
+        - ``4``: LN_NELDERMEAD with full softmax reparameterization.
+        - ``5``: LN_BOBYQA with full softmax reparameterization.
+        - ``6``: LN_NELDERMEAD with softmax fractions and clip-on-entry for
+          LAP/grain (recommended for real imagery).
+
         Algorithms 4-6 absorb the simplex (f_snow + f_shade + f_bg = 1, all ≥ 0)
         into the parameter transformation, so unconstrained NLopt solvers can
         replace COBYLA. On real imagery the hybrid (algorithm 6) is the
@@ -325,13 +584,15 @@ def speedy_invert_array1d(spectra_targets, spectra_backgrounds, obs_solar_angles
         Default is [0.5, 0.05, 10, 250].
     algorithm : int, optional
         Optimization algorithm to use (default: 2).
-        1 = LN_COBYLA (constrained, derivative-free),
-        2 = LN_NELDERMEAD (unconstrained simplex; ignores box bounds),
-        3 = LD_SLSQP (gradient-based; degraded — uses NLopt's finite-diff fallback),
-        4 = LN_NELDERMEAD on softmax-reparameterized cost (full softmax),
-        5 = LN_BOBYQA on softmax-reparameterized cost (quadratic-model variant),
-        6 = LN_NELDERMEAD on hybrid: softmax for fractions, clip-on-entry for
-            LAP/grain (recommended for real imagery).
+
+        - ``1``: LN_COBYLA (constrained, derivative-free).
+        - ``2``: LN_NELDERMEAD (unconstrained simplex; ignores box bounds).
+        - ``3``: LD_SLSQP (gradient-based; finite-difference fallback).
+        - ``4``: LN_NELDERMEAD with full softmax reparameterization.
+        - ``5``: LN_BOBYQA with full softmax reparameterization.
+        - ``6``: LN_NELDERMEAD with softmax fractions and clip-on-entry for
+          LAP/grain (recommended for real imagery).
+
         Algorithms 4-6 absorb the simplex (f_snow + f_shade + f_bg = 1, all ≥ 0)
         into the parameter transformation, so unconstrained NLopt solvers can
         replace COBYLA. On real imagery the hybrid (algorithm 6) is the
@@ -435,13 +696,15 @@ def speedy_invert_array2d(spectra_targets, spectra_backgrounds, obs_solar_angles
         Default is [0.5, 0.05, 10, 250].
     algorithm : int, optional
         Optimization algorithm to use (default: 2).
-        1 = LN_COBYLA (constrained, derivative-free),
-        2 = LN_NELDERMEAD (unconstrained simplex; ignores box bounds),
-        3 = LD_SLSQP (gradient-based; degraded — uses NLopt's finite-diff fallback),
-        4 = LN_NELDERMEAD on softmax-reparameterized cost (full softmax),
-        5 = LN_BOBYQA on softmax-reparameterized cost (quadratic-model variant),
-        6 = LN_NELDERMEAD on hybrid: softmax for fractions, clip-on-entry for
-            LAP/grain (recommended for real imagery).
+
+        - ``1``: LN_COBYLA (constrained, derivative-free).
+        - ``2``: LN_NELDERMEAD (unconstrained simplex; ignores box bounds).
+        - ``3``: LD_SLSQP (gradient-based; finite-difference fallback).
+        - ``4``: LN_NELDERMEAD with full softmax reparameterization.
+        - ``5``: LN_BOBYQA with full softmax reparameterization.
+        - ``6``: LN_NELDERMEAD with softmax fractions and clip-on-entry for
+          LAP/grain (recommended for real imagery).
+
         Algorithms 4-6 absorb the simplex (f_snow + f_shade + f_bg = 1, all ≥ 0)
         into the parameter transformation, so unconstrained NLopt solvers can
         replace COBYLA. On real imagery the hybrid (algorithm 6) is the
@@ -549,13 +812,15 @@ def speedy_invert_xarray(spectra_targets, spectra_backgrounds, obs_solar_angles,
         Default is [0.5, 0.05, 10, 250].
     algorithm : int, optional
         Optimization algorithm to use (default: 2).
-        1 = LN_COBYLA (constrained, derivative-free),
-        2 = LN_NELDERMEAD (unconstrained simplex; ignores box bounds),
-        3 = LD_SLSQP (gradient-based; degraded — uses NLopt's finite-diff fallback),
-        4 = LN_NELDERMEAD on softmax-reparameterized cost (full softmax),
-        5 = LN_BOBYQA on softmax-reparameterized cost (quadratic-model variant),
-        6 = LN_NELDERMEAD on hybrid: softmax for fractions, clip-on-entry for
-            LAP/grain (recommended for real imagery).
+
+        - ``1``: LN_COBYLA (constrained, derivative-free).
+        - ``2``: LN_NELDERMEAD (unconstrained simplex; ignores box bounds).
+        - ``3``: LD_SLSQP (gradient-based; finite-difference fallback).
+        - ``4``: LN_NELDERMEAD with full softmax reparameterization.
+        - ``5``: LN_BOBYQA with full softmax reparameterization.
+        - ``6``: LN_NELDERMEAD with softmax fractions and clip-on-entry for
+          LAP/grain (recommended for real imagery).
+
         Algorithms 4-6 absorb the simplex (f_snow + f_shade + f_bg = 1, all ≥ 0)
         into the parameter transformation, so unconstrained NLopt solvers can
         replace COBYLA. On real imagery the hybrid (algorithm 6) is the
