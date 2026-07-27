@@ -42,6 +42,40 @@ def test_interpolate_all_array():
         [0.69418118, 0.72305336, 0.75899187, 0.76630307, 0.76921281, 0.75832135, 0.01766575, 0.02501143, 0.73101483])
     np.testing.assert_allclose(ret, expected, rtol=1e-5)
 
+    # A nonlinear axis must use the interval containing the requested value.
+    # This also pins symmetric endpoint behavior: the first interval at weight
+    # zero for the lower bound and the last interval at weight one for the
+    # upper bound.
+    nonlinear_grain = np.array([1.0, 4.0, 9.0], dtype=np.float64)
+    simple_axis = np.array([0.0, 1.0], dtype=np.float64)
+    nonlinear_lut = np.broadcast_to(
+        nonlinear_grain,
+        (1, simple_axis.size, simple_axis.size, nonlinear_grain.size),
+    ).astype(np.float32).copy()
+
+    def interpolate_grain(value):
+        return spires_inversion.core.interpolate_all_array(
+            lut_reflectances=nonlinear_lut,
+            lut_bands=np.array([1.0]),
+            lut_solar_angles=simple_axis,
+            lut_lap_concentrations=simple_axis,
+            lut_grain_sizes=nonlinear_grain,
+            solar_angle=0.0,
+            lap_concentration=0.0,
+            grain_size=value,
+        )
+
+    np.testing.assert_allclose(interpolate_grain(1.0), [1.0])
+    np.testing.assert_allclose(interpolate_grain(2.5), [2.5])
+    np.testing.assert_allclose(interpolate_grain(9.0), [9.0])
+    assert spires_inversion.get_index(nonlinear_grain, 1.0) == 0.0
+    assert spires_inversion.get_index(nonlinear_grain, 2.5) == 0.5
+    assert spires_inversion.get_index(nonlinear_grain, 9.0) == 2.0
+    with pytest.raises(ValueError, match="outside coordinate range"):
+        spires_inversion.get_index(nonlinear_grain, 0.5)
+    with pytest.raises(ValueError, match="outside coordinate range"):
+        spires_inversion.get_index(nonlinear_grain, 9.5)
+
 
 def test_spectrum_difference():
     x = [0.5, 0.01, lap_concentration, grain_size]

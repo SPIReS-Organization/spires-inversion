@@ -222,7 +222,6 @@ The C++ optimizations provide significant speedups over pure Python:
 ## Known Issues
 
 - SLSQP solver doesn't work in the C++ implementation; using COBYLA instead
-- SWIG interpolator and scipy's RegularGridInterpolator behave differently when coordinates aren't linspace
 - COBYLA in scipy can't set `rhobeg` per dimension individually, requiring problem scaling
 
 ### Reparameterized algorithms (4, 5, 6) and grain-bound saturation

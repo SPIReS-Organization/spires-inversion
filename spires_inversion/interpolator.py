@@ -31,6 +31,17 @@ def get_index(coordinates: np.array, value: float) -> float:
     1.5
     """
 
+    coordinates = np.asarray(coordinates)
+    if coordinates.ndim != 1 or coordinates.size < 2:
+        raise ValueError("coordinates must be a one-dimensional array with at least two values")
+    if value < coordinates[0] or value > coordinates[-1]:
+        raise ValueError(
+            f"value {value} is outside coordinate range "
+            f"[{coordinates[0]}, {coordinates[-1]}]"
+        )
+    if value == coordinates[-1]:
+        return float(coordinates.size - 1)
+
     right_idx = np.searchsorted(coordinates, value, side='right')
     left_idx = right_idx - 1
     value_left = coordinates[left_idx]
