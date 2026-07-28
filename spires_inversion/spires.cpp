@@ -8,6 +8,9 @@
 #include "spires.h"
 
 
+static constexpr double ALGORITHM_6_GRAIN_INITIAL_STEP_SQRT_UM = 4.0;
+
+
 // ----------------------------------------------------------------------------
 // Index-space helpers
 // ----------------------------------------------------------------------------
@@ -778,13 +781,21 @@ std::vector<double> invert_impl(const T* spectrum_background, int len_background
         // NLopt bounds — the clip turns the LUT bound into a flat plateau
         // that the simplex contracts against, terminating cleanly.
         //
-        // Initial step: z-space scale (~0.5) for fractions, physical units
-        // (~100) for dust/grain — matches COBYLA's rhobeg on the latter two.
+        // Initial step: z-space scale (~0.5) for fractions, 100 ppm for dust,
+        // and 4 sqrt(um) for grain. The grain step is tuned to the LUT kernel
+        // coordinate; it is intentionally Algorithm 6-specific.
         opt.set_min_objective(spectrum_difference_hybrid_wrapper<T>, &obj_data);
         opt.set_maxeval(max_eval);
         opt.set_ftol_abs(1e-4);
         opt.set_xtol_rel(1e-2);
-        opt.set_initial_step(std::vector<double>{0.5, 0.5, 100.0, 100.0});
+        opt.set_initial_step(
+            std::vector<double>{
+                0.5,
+                0.5,
+                100.0,
+                ALGORITHM_6_GRAIN_INITIAL_STEP_SQRT_UM,
+            }
+        );
 
         std::vector<double> y = x_to_y_hybrid(x0);
         double minf;

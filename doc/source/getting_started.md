@@ -107,11 +107,16 @@ data = spires_inversion.invert(
     data,
     lut="reflectance_lut.nc",
     algorithm=6,
-    max_eval=100,
     apply_valid_inversion_mask=True,
     n_workers=1,
 )
 ```
+
+Algorithm 6 defaults to a 250 µm initial grain radius, a 4 √µm grain-coordinate
+step, and 200 objective evaluations. Pass `max_eval` explicitly to override the
+algorithm-specific evaluation default or `initial_grain_radius_um` to override
+the initial radius. The Algorithm 6 grain step is engine-owned, not a runtime
+option, and is recorded in result provenance.
 
 The function detects a complete canonical cluster schema automatically.
 Partial cluster state is rejected, excluded labels (`-1`) remain NaN, and

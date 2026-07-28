@@ -25,12 +25,20 @@ import numpy as np
 import scipy
 
 
+DEFAULT_ALGORITHM = 6
+DEFAULT_MAX_EVAL = 100
+ALGORITHM_6_DEFAULT_MAX_EVAL = 200
+DEFAULT_INITIAL_GRAIN_RADIUS_UM = 250.0
+ALGORITHM_6_GRAIN_INITIAL_STEP_SQRT_UM = 4.0
+
+
 def invert(
     data: SpiresData,
     *,
     lut,
-    max_eval=100,
-    algorithm=6,
+    max_eval=None,
+    algorithm=DEFAULT_ALGORITHM,
+    initial_grain_radius_um=DEFAULT_INITIAL_GRAIN_RADIUS_UM,
     apply_valid_inversion_mask=True,
     n_workers=1,
 ):
@@ -50,8 +58,12 @@ def invert(
         Dataset.
     max_eval : int, optional
         Maximum objective evaluations per pixel or cluster representative.
+        When omitted, Algorithm 6 uses 200; other algorithms retain 100.
     algorithm : int, optional
         Numerical-kernel algorithm code. Algorithm 6 is the object-path default.
+    initial_grain_radius_um : float, optional
+        Initial effective grain radius in micrometers. It must lie within the
+        LUT grain-radius range. The default is 250.
     apply_valid_inversion_mask : bool, optional
         Apply ``valid_inversion_mask`` when it is present. Clustered inputs must
         have been formed using the same effective policy.
@@ -66,6 +78,7 @@ def invert(
         Replacement object carrying canonical float32 inversion results.
     """
     validate_for_inversion(data)
+    max_eval = _resolve_max_eval(max_eval, algorithm)
     if not isinstance(apply_valid_inversion_mask, (bool, np.bool_)):
         raise TypeError("apply_valid_inversion_mask must be boolean")
     if (
@@ -79,6 +92,10 @@ def invert(
     reflectance_lut = load_reflectance_lut(lut, expected_lap_type="dust")
     _validate_scene_lut_bands(data.scene["reflectance"], reflectance_lut)
     lut_arrays = kernel_lut_arrays(reflectance_lut)
+    initial_grain_radius_um = _validate_initial_grain_radius(
+        initial_grain_radius_um,
+        lut_arrays["sqrt_grain_radii"],
+    )
 
     target = data.scene["reflectance"]
     valid_mask = data.scene.get("valid_inversion_mask")
@@ -101,6 +118,7 @@ def invert(
             lut_arrays=lut_arrays,
             max_eval=max_eval,
             algorithm=algorithm,
+            initial_grain_radius_um=initial_grain_radius_um,
             n_workers=n_workers,
         )
     else:
@@ -109,6 +127,7 @@ def invert(
             lut_arrays=lut_arrays,
             max_eval=max_eval,
             algorithm=algorithm,
+            initial_grain_radius_um=initial_grain_radius_um,
             mask_applied=mask_applied,
             n_workers=n_workers,
         )
@@ -126,6 +145,7 @@ def invert(
             reflectance_lut=reflectance_lut,
             algorithm=algorithm,
             max_eval=max_eval,
+            initial_grain_radius_um=initial_grain_radius_um,
             mask_applied=mask_applied,
             clustered=clusters_present(data),
         )
@@ -138,6 +158,14 @@ def invert(
     return data.assign_results(results)
 
 
+def _resolve_max_eval(max_eval, algorithm):
+    if max_eval is not None:
+        return max_eval
+    if algorithm == 6:
+        return ALGORITHM_6_DEFAULT_MAX_EVAL
+    return DEFAULT_MAX_EVAL
+
+
 def _result_provenance(
     data,
     *,
@@ -145,6 +173,7 @@ def _result_provenance(
     reflectance_lut,
     algorithm,
     max_eval,
+    initial_grain_radius_um,
     mask_applied,
     clustered,
 ):
@@ -155,6 +184,7 @@ def _result_provenance(
         "spires_inversion_version": _distribution_version("spires-inversion"),
         "inversion_algorithm": int(algorithm),
         "inversion_max_eval": int(max_eval),
+        "inversion_initial_grain_radius_um": float(initial_grain_radius_um),
         "valid_inversion_mask_available": int(valid_mask is not None),
         "valid_inversion_mask_applied": int(mask_applied),
         "valid_inversion_mask_source": (
@@ -164,6 +194,10 @@ def _result_provenance(
         "reflectance_lut_identity": identity,
         "reflectance_lut_normalization": normalization,
     }
+    if algorithm == 6:
+        attrs["inversion_grain_initial_step_sqrt_um"] = (
+            ALGORITHM_6_GRAIN_INITIAL_STEP_SQRT_UM
+        )
     if clustered:
         label_attrs = data.scene[
             contract_conventions.CLUSTER_LABEL_VARIABLE
@@ -209,6 +243,7 @@ def _invert_full_resolution_scene(
     lut_arrays,
     max_eval,
     algorithm,
+    initial_grain_radius_um,
     mask_applied,
     n_workers,
 ):
@@ -235,6 +270,7 @@ def _invert_full_resolution_scene(
             lut_arrays=lut_arrays,
             max_eval=max_eval,
             algorithm=algorithm,
+            initial_grain_radius_um=initial_grain_radius_um,
             n_workers=n_workers,
         )
     return kernel_results, eligible
@@ -246,6 +282,7 @@ def _invert_clustered_scene(
     lut_arrays,
     max_eval,
     algorithm,
+    initial_grain_radius_um,
     n_workers,
 ):
     scene = data.scene
@@ -264,6 +301,7 @@ def _invert_clustered_scene(
             lut_arrays=lut_arrays,
             max_eval=max_eval,
             algorithm=algorithm,
+            initial_grain_radius_um=initial_grain_radius_um,
             n_workers=n_workers,
         )
         kernel_results[eligible] = cluster_results[label[eligible]]
@@ -278,6 +316,7 @@ def _invert_rows(
     lut_arrays,
     max_eval,
     algorithm,
+    initial_grain_radius_um,
     n_workers,
 ):
     """Invert nonempty rows serially or in balanced contiguous thread chunks."""
@@ -286,7 +325,10 @@ def _invert_rows(
             0.5,
             0.05,
             _within_axis(10.0, lut_arrays["lap_concentrations"]),
-            _within_axis(np.sqrt(250.0), lut_arrays["sqrt_grain_radii"]),
+            _within_axis(
+                np.sqrt(initial_grain_radius_um),
+                lut_arrays["sqrt_grain_radii"],
+            ),
         ],
         dtype=np.float64,
     )
@@ -352,6 +394,28 @@ def _invert_row_chunk(
 
 def _within_axis(value, axis):
     return float(np.clip(value, np.asarray(axis)[0], np.asarray(axis)[-1]))
+
+
+def _validate_initial_grain_radius(value, sqrt_grain_axis):
+    if isinstance(value, (bool, np.bool_)) or not isinstance(
+        value,
+        (int, float, np.integer, np.floating),
+    ):
+        raise TypeError("initial_grain_radius_um must be a real number")
+    value = float(value)
+    if not np.isfinite(value) or value <= 0:
+        raise ValueError("initial_grain_radius_um must be finite and > 0")
+
+    axis = np.asarray(sqrt_grain_axis, dtype=np.float64)
+    lower = float(axis[0] ** 2)
+    upper = float(axis[-1] ** 2)
+    tolerance = np.finfo(np.float64).eps * max(abs(lower), abs(upper), 1.0) * 8
+    if value < lower - tolerance or value > upper + tolerance:
+        raise ValueError(
+            "initial_grain_radius_um must lie within the LUT grain-radius "
+            f"range [{lower:g}, {upper:g}]"
+        )
+    return float(np.clip(value, lower, upper))
 
 
 def _validate_scene_lut_bands(target, lut):
