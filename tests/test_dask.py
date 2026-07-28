@@ -98,9 +98,13 @@ def test_speedy_invert_dask_with_time():
     res = spires_inversion.speedy_invert_dask(
         targets, backgrounds, angles, interpolator,
         scatter_lut=False, algorithm=1)
+    spires_inversion.validate_result_structure(res)
     if hasattr(res, 'compute'):
         res = res.compute()
     _assert_pixels_match(res, ny=2, nx=3, nt=2)
+    from spires_contract import validate_results
+    for time_index in range(res.sizes['time']):
+        validate_results(res.isel(time=time_index, drop=True))
 
 
 def test_speedy_invert_dask_chunked():
@@ -110,6 +114,8 @@ def test_speedy_invert_dask_chunked():
         targets, backgrounds, angles, interpolator,
         scatter_lut=False, algorithm=1)
     # Lazy result: chunked input should yield a dask-backed dataset.
+    assert any(res[v].chunks is not None for v in res.data_vars)
+    spires_inversion.validate_result_structure(res)
     assert any(res[v].chunks is not None for v in res.data_vars)
     res = res.compute()
     _assert_pixels_match(res, ny=2, nx=3)
@@ -145,3 +151,15 @@ def test_speedy_invert_dask_eager_output_is_validated():
         targets, backgrounds, angles, interpolator,
         scatter_lut=False, algorithm=1)
     validate_results(res)
+
+
+def test_encode_results_uses_canonical_fsnow_scale_name():
+    targets, backgrounds, angles = _make_inputs(ny=2, nx=3)
+    results = spires_inversion.speedy_invert_dask(
+        targets, backgrounds, angles, interpolator,
+        scatter_lut=False, algorithm=1)
+    encoded = spires_inversion.encode_results(results, fsnow_scale=100)
+
+    assert encoded['fsnow'].dtype == np.int8
+    assert encoded['fsnow'].attrs['scale_factor'] == 0.01
+    assert results['fsnow'].dtype == np.float32

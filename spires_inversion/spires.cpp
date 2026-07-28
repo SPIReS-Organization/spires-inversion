@@ -40,15 +40,15 @@ double interpolate_idx_impl(const T* lut_reflectances, int n_lut_bands, int n_lu
     int start_idx = band_idx * (n_lut_solar_angles * n_lut_lap_concentrations * n_lut_grain_sizes);
     const T* cube = lut_reflectances + start_idx;
 
-    int iz1 = static_cast<int>(solar_angle_idx);
-    int id1 = static_cast<int>(lap_concentration_idx);
-    int iw1 = static_cast<int>(grain_size_idx);
-    // Clamp ceiling indices so a coord exactly at the upper bound doesn't read
-    // past the end. When clamped, the "interpolation" between iz1==iz2 reduces
-    // to v at iz1, which is the desired behavior.
-    int iz2 = std::min(iz1 + 1, n_lut_solar_angles - 1);
-    int id2 = std::min(id1 + 1, n_lut_lap_concentrations - 1);
-    int iw2 = std::min(iw1 + 1, n_lut_grain_sizes - 1);
+    // At the upper bound, use the final non-degenerate interval with weight 1.
+    // This evaluates the legal endpoint exactly without creating x1 == x2 and
+    // dividing by zero in linearInterpolate.
+    int iz1 = std::min(static_cast<int>(solar_angle_idx), n_lut_solar_angles - 2);
+    int id1 = std::min(static_cast<int>(lap_concentration_idx), n_lut_lap_concentrations - 2);
+    int iw1 = std::min(static_cast<int>(grain_size_idx), n_lut_grain_sizes - 2);
+    int iz2 = iz1 + 1;
+    int id2 = id1 + 1;
+    int iw2 = iw1 + 1;
 
     double v000 = cube[n_lut_grain_sizes * (id1 + iz1 * n_lut_lap_concentrations) + iw1];
     double v001 = cube[n_lut_grain_sizes * (id1 + iz1 * n_lut_lap_concentrations) + iw2];
@@ -115,30 +115,31 @@ double get_idx_linspace(double value, double* coordinates, int len_coordinates) 
 
 
 double get_idx(double value, double* coordinates, int len_coordinates) {
-    // Preserves original semantics: `left_index` is the smallest index where
-    // coordinates[left_index] >= value (or len-1 if value exceeds the array).
-    // Interpolation then uses the [left_index, left_index+1] bracket, which
-    // means the returned float index can lie below `left_index` for values
-    // between two coordinates — callers (interpolate_idx) handle this by
-    // taking the floor.
-    //
-    // Bug fix: when value is at/above the upper bound, the original code
-    // would set right_index = len_coordinates and dereference past the end.
-    // Clamp left_index to len-2 so right_index = left_index+1 stays in range.
-    size_t left_index = 0;
-    while (left_index < static_cast<size_t>(len_coordinates - 1) && coordinates[left_index] < value) {
-        left_index++;
+    if (len_coordinates < 2) {
+        std::cerr << "Error: Coordinate axes must contain at least two values" << std::endl;
+        return -1.0;
     }
-    if (left_index >= static_cast<size_t>(len_coordinates - 1)) {
-        left_index = len_coordinates - 2;
-        if (len_coordinates < 2) return 0.0;
+
+    // Preserve out-of-range values as invalid indices so interpolate_idx_impl
+    // rejects them rather than clipping or extrapolating.
+    if (value < coordinates[0]) return -1.0;
+    if (value > coordinates[len_coordinates - 1]) {
+        return static_cast<double>(len_coordinates);
     }
-    size_t right_index = left_index + 1;
+
+    // Both endpoints use their nearest non-degenerate interval:
+    // [0, 1] with weight 0 at the lower bound, and [n-2, n-1] with weight 1
+    // at the upper bound. Interior values use the bracket that contains them.
+    if (value == coordinates[len_coordinates - 1]) {
+        return static_cast<double>(len_coordinates - 1);
+    }
+    double* right = std::upper_bound(
+        coordinates, coordinates + len_coordinates, value
+    );
+    size_t right_index = static_cast<size_t>(right - coordinates);
+    size_t left_index = right_index - 1;
     double left_coord = coordinates[left_index];
     double right_coord = coordinates[right_index];
-    if (left_coord == value) {
-        return static_cast<double>(left_index);
-    }
     double interpolation_factor = (value - left_coord) / (right_coord - left_coord);
     return left_index + interpolation_factor;
 }

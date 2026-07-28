@@ -42,6 +42,40 @@ def test_interpolate_all_array():
         [0.69418118, 0.72305336, 0.75899187, 0.76630307, 0.76921281, 0.75832135, 0.01766575, 0.02501143, 0.73101483])
     np.testing.assert_allclose(ret, expected, rtol=1e-5)
 
+    # A nonlinear axis must use the interval containing the requested value.
+    # This also pins symmetric endpoint behavior: the first interval at weight
+    # zero for the lower bound and the last interval at weight one for the
+    # upper bound.
+    nonlinear_grain = np.array([1.0, 4.0, 9.0], dtype=np.float64)
+    simple_axis = np.array([0.0, 1.0], dtype=np.float64)
+    nonlinear_lut = np.broadcast_to(
+        nonlinear_grain,
+        (1, simple_axis.size, simple_axis.size, nonlinear_grain.size),
+    ).astype(np.float32).copy()
+
+    def interpolate_grain(value):
+        return spires_inversion.core.interpolate_all_array(
+            lut_reflectances=nonlinear_lut,
+            lut_bands=np.array([1.0]),
+            lut_solar_angles=simple_axis,
+            lut_lap_concentrations=simple_axis,
+            lut_grain_sizes=nonlinear_grain,
+            solar_angle=0.0,
+            lap_concentration=0.0,
+            grain_size=value,
+        )
+
+    np.testing.assert_allclose(interpolate_grain(1.0), [1.0])
+    np.testing.assert_allclose(interpolate_grain(2.5), [2.5])
+    np.testing.assert_allclose(interpolate_grain(9.0), [9.0])
+    assert spires_inversion.get_index(nonlinear_grain, 1.0) == 0.0
+    assert spires_inversion.get_index(nonlinear_grain, 2.5) == 0.5
+    assert spires_inversion.get_index(nonlinear_grain, 9.0) == 2.0
+    with pytest.raises(ValueError, match="outside coordinate range"):
+        spires_inversion.get_index(nonlinear_grain, 0.5)
+    with pytest.raises(ValueError, match="outside coordinate range"):
+        spires_inversion.get_index(nonlinear_grain, 9.5)
+
 
 def test_spectrum_difference():
     x = [0.5, 0.01, lap_concentration, grain_size]
@@ -333,37 +367,37 @@ def test_softmax_beats_cobyla_on_real_imagery():
 
 def test_hybrid_saturation_is_stable_under_max_eval():
     """The hybrid algorithm (6 = softmax for fractions + clip for dust/grain)
-    should converge to a stable saturation set: pixels whose true optimum lies
-    at the LUT grain boundary find that boundary in a few iterations and stop,
-    so the saturation count at max_eval=500 must be close to the count at
-    max_eval=100.
+    should converge to a stable saturation set after its initial search. With
+    exact interpolation at the LUT upper bound, the 50x50 fixture continues
+    converging between max_eval=100 and 200, then changes only 2/2500 grain
+    saturation classifications between max_eval=200 and 500.
 
     The full sigmoid (algorithm 4) lacks this property — its saturation count
     grows roughly linearly with max_eval as more pixels drift up the asymptotic
-    z-ridge. So this test pins the *stability* property that distinguishes
-    honest boundary signal from optimizer drift. On this patch the hybrid
-    grows by ~4 pixels (13 → 17) between max_eval 100 and 500; the full
-    softmax grows by ~370 (4 → 376)."""
+    z-ridge. This test compares the masks, not only their counts, so compensating
+    entries and exits cannot conceal an unstable saturation set."""
     R, R0, sza, _, _, n = _real_imagery_setup()
     grain_max = interpolator.grain_sizes.max()
 
-    def n_saturated(max_eval):
+    def saturation_mask(max_eval):
         res = spires_inversion.speedy_invert_array2d(
             spectra_targets=R, spectra_backgrounds=R0, obs_solar_angles=sza,
             interpolator=interpolator, algorithm=6, max_eval=max_eval,
             x0=np.array(x0))
-        return int((res[..., 3] >= grain_max - 1).sum())
+        return res[..., 3] >= grain_max - 1
 
-    sat_100 = n_saturated(100)
-    sat_500 = n_saturated(500)
-    growth = (sat_500 - sat_100) / n
+    sat_200 = saturation_mask(200)
+    sat_500 = saturation_mask(500)
+    changed = int(np.count_nonzero(sat_200 ^ sat_500))
+    changed_fraction = changed / n
 
-    # Stability bar: ≤1% additional pixels saturate when max_eval grows 5×.
-    # Hybrid currently shows ~0.2% on this patch; full softmax shows ~15%.
+    # Stability bar: ≤1% of pixels may change saturation classification after
+    # max_eval=200. Hybrid currently changes 0.08%; full softmax changes >9%.
     # The 1% bar separates the regimes with platform-variance headroom.
-    assert growth <= 0.01, (
-        f"hybrid saturation grew from {sat_100} to {sat_500} of {n} pixels "
-        f"({growth:.2%}) when max_eval went 100 -> 500. Growth >1% suggests "
+    assert changed_fraction <= 0.01, (
+        f"hybrid saturation mask changed for {changed}/{n} pixels "
+        f"({changed_fraction:.2%}) when max_eval went 200 -> 500. A change "
+        "above 1% suggests "
         "the clip-on-entry mechanism is no longer pinning saturated pixels — "
         "the optimizer may be drifting like the full softmax (algorithm 4)")
 
