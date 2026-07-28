@@ -124,7 +124,6 @@ inverted = spires_inversion.invert(
     data,
     lut="reflectance_lut.nc",
     algorithm=6,
-    max_eval=100,
     apply_valid_inversion_mask=True,
     n_workers=1,
 )
@@ -140,6 +139,12 @@ reclustered.
 `n_workers` controls in-process thread chunking for this eager object path.
 It defaults to one to avoid oversubscribing Dask or batch workers. Standalone
 single-scene jobs may opt into additional threads explicitly.
+
+Algorithm 6 defaults to a 250 µm initial grain radius, a 4 √µm grain-coordinate
+step, and 200 objective evaluations. Algorithms 1–5 retain a default evaluation
+limit of 100 when selected through this object path. Callers may override the
+initial radius with `initial_grain_radius_um`; the Algorithm 6 step remains an
+engine-owned setting. Both values are recorded in result provenance.
 
 On the Phase 3 VIIRS benchmark, reflectance tolerances `0.02` and `0.05`
 provided 1.53× and 2.76× public-route end-to-end speedups, respectively.
@@ -293,7 +298,8 @@ the LUT box bounds on dust and grain:
   the objective — turning the bound into a true flat wall.
 
 The hybrid is the recommended path. On a real 50×50 Sentinel-2 patch with exact
-interpolation at the LUT upper bounds (algorithm benchmark, max_eval=100):
+interpolation at the LUT upper bounds (an earlier pre-tuning benchmark using
+the former grain-coordinate step of 100 and max_eval=100):
 
 | Algorithm                     | Median residual | Grain ≥ 1199 µm | Time   | Speedup    |
 |-------------------------------|-----------------|-----------------|--------|------------|
@@ -346,9 +352,9 @@ C^0-but-not-C^1 kink at the bound, which is benign for derivative-free solvers
 **Recommendation:** use algorithm 6 (`NELDERMEAD-hybrid`) for new work. Treat
 its saturated pixels as "the optimizer selected the LUT boundary" and flag
 them downstream rather than assuming either exact physical truth or optimizer
-noise. The default max_eval=100 favors speed; use at least 200 evaluations when
-a stable boundary classification matters. If using algorithms 4 or 5, do not
-raise `max_eval` above the default of 100 without a downstream filter, because
+noise. Algorithm 6 now defaults to max_eval=200, where the hybrid's boundary
+classification was stable in the available benchmarks. If using algorithms 4
+or 5, do not raise `max_eval` above 100 without a downstream filter, because
 their saturation count grows with max_eval rather than converging.
 
 ### Cross-platform numerical reproducibility
