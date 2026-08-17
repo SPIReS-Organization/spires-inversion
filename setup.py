@@ -52,7 +52,8 @@ class build_py(_build_py):
         return super().run()
 
 
-setuptools.setup(        
+setuptools.setup(
     packages=setuptools.find_packages(),
     ext_modules=[spires],
+    cmdclass={'build_py': build_py},
 )
