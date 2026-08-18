@@ -54,7 +54,8 @@ def _scene(n_bands):
         (0.1 + 0.01 * rng).astype(np.float32), dims=('y', 'x', 'band'),
         coords={'band': np.arange(n_bands)})
     angles = xr.DataArray(
-        np.full((ny, nx), 50.0, dtype=np.float32), dims=('y', 'x'))
+        np.full((ny, nx), 50.0, dtype=np.float32), dims=('y', 'x'),
+        attrs={'units': 'degrees'})
     return targets, backgrounds, angles
 
 
@@ -93,6 +94,7 @@ def _object_data(canonical_lut, *, clustered):
                 solar_values,
                 dims=('y', 'x'),
                 coords={'y': y, 'x': x},
+                attrs={'units': 'degrees'},
             ),
         }
     )

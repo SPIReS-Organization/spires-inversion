@@ -32,9 +32,9 @@ classifiers = [
 ]
 dependencies = [
     # Contract validators are called at the standardized inversion boundaries.
-    # Persistence-aware releases are not yet published, so the coordinated
-    # scientific stack follows the merged main branch.
-    "spires-contract @ git+https://github.com/SPIReS-Organization/spires-contract.git@main",
+    # Not yet on PyPI -> pinned tag from GitHub (bump deliberately, not by
+    # floating on main, so contract changes can't silently break CI here).
+    "spires-contract @ git+https://github.com/SPIReS-Organization/spires-contract@v2.0.0",
     "numpy",
     "h5py",
     "scipy",
