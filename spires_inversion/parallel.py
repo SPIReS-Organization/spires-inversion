@@ -80,6 +80,78 @@ def _scatter_lut(client, reflectances, dask):
 _RESULT_DTYPE = np.float32
 
 
+#: Dimension that is an *input core dim* of the imagery arrays, so it must be
+#: exactly one chunk. apply_ufunc otherwise fails with ``Core dimension 'dim0'
+#: consists of multiple chunks`` — an internal name that appears nowhere in
+#: this API, which is why ``chunks=`` is validated here instead.
+_IMAGERY_CORE_DIM = 'band'
+
+
+def _apply_chunks(chunks, spectra_targets, spectra_backgrounds,
+                  obs_solar_angles):
+    """Impose one uniform block shape on the three imagery inputs.
+
+    ``chunks`` is a ``{dim: size}`` mapping over *loop* dims (``y``, ``x`` and,
+    for a time-stacked cube, ``time``). The same shape must reach all three
+    arrays: ``dask_gufunc_kwargs={'allow_rechunk': False}`` rejects not only
+    inputs chunked *differently* from each other but also inputs where some are
+    chunked and some are not, both with ``Dimension '__loopdim0__' with
+    different chunksize present``. Dims absent from a given array are skipped,
+    which is how a static ``(y, x)`` background joins a ``(time, y, x, band)``
+    target stack.
+
+    ``band`` may be named only as ``-1``/``None`` (an explicit "one chunk");
+    any other value is rejected. The LUT is not touched here — it is passed
+    whole and kept single-chunk by ``_scatter_lut``.
+    """
+    try:
+        requested = dict(chunks)
+    except (TypeError, ValueError):
+        raise TypeError(
+            "chunks must be a mapping of dimension name to block size, "
+            f"e.g. {{'y': 1024, 'x': 1024}}; got {chunks!r}"
+        ) from None
+
+    arrays = (spectra_targets, spectra_backgrounds, obs_solar_angles)
+    known = set().union(*(array.dims for array in arrays))
+
+    unknown = sorted(set(requested) - known)
+    if unknown:
+        raise ValueError(
+            f"chunks names dimension(s) {unknown} that are not present on the "
+            f"imagery inputs; available dimensions are {sorted(known)}"
+        )
+
+    core_size = requested.pop(_IMAGERY_CORE_DIM, -1)
+    if core_size not in (-1, None):
+        raise ValueError(
+            f"{_IMAGERY_CORE_DIM!r} is a core dimension of the inversion "
+            "kernel and must be a single chunk; pass "
+            f"{{'{_IMAGERY_CORE_DIM}': -1}} or omit it, not "
+            f"{{'{_IMAGERY_CORE_DIM}': {core_size!r}}}. Chunk the loop "
+            "dimensions (y, x, time) instead."
+        )
+
+    if not requested:
+        raise ValueError(
+            "chunks must name at least one loop dimension to split "
+            f"(y, x, or time); got only {{'{_IMAGERY_CORE_DIM}': "
+            f"{core_size!r}}}"
+        )
+
+    rechunked = []
+    for array in arrays:
+        spec = {
+            dim: size for dim, size in requested.items() if dim in array.dims
+        }
+        # 'band' is pinned to one chunk on the arrays that carry it, so a
+        # caller's pre-existing split along it cannot survive into the kernel.
+        if _IMAGERY_CORE_DIM in array.dims:
+            spec[_IMAGERY_CORE_DIM] = -1
+        rechunked.append(array.chunk(spec) if spec else array)
+    return tuple(rechunked)
+
+
 def _make_invert_chunk(max_eval, x0, algorithm):
     """Build the per-chunk inversion function passed to apply_ufunc.
 
@@ -205,14 +277,18 @@ def encode_results(ds, fill_value=-1, fsnow_scale=100, fshade_scale=100,
 def speedy_invert_dask(spectra_targets, spectra_backgrounds, obs_solar_angles,
                        interpolator, spectrum_shade=None, max_eval=100,
                        x0=np.array([0.5, 0.05, 10, 250]), algorithm=2,
-                       client=None, scatter_lut=True):
+                       client=None, scatter_lut=True, chunks=None):
     """
     Parallel inversion of snow reflectance spectra using Dask and xarray.
 
     This method enables distributed processing of large satellite imagery datasets
     by leveraging Dask's parallel computation capabilities through xarray.apply_ufunc.
-    It's particularly useful for processing time series of satellite imagery where
-    the data is too large to fit in memory.
+
+    Processing data larger than memory requires ``chunks=`` (or inputs the
+    caller has already chunked). It is **opt-in**: with numpy-backed inputs and
+    no ``chunks=``, ``dask='parallelized'`` promotes the result to a *single*
+    block, so the whole array must fit in one worker and the kernel is invoked
+    exactly once — lazy, but not parallel and not out-of-core.
 
     Parameters
     ----------
@@ -242,9 +318,33 @@ def speedy_invert_dask(spectra_targets, spectra_backgrounds, obs_solar_angles,
         Dask client. If None, uses the default client when one is active.
     scatter_lut : bool, optional
         Broadcast the LUT to all workers (default: True).
+    chunks : mapping, optional
+        Block size per *loop* dimension, e.g. ``{'y': 1024, 'x': 1024}`` or
+        ``{'time': 1, 'y': 2048, 'x': 2048}``. Applied uniformly to all three
+        imagery inputs, which is the only legal arrangement (see Notes).
+        Default ``None`` leaves the inputs exactly as given, preserving the
+        single-block behaviour described above. Must name at least one of
+        ``y``, ``x`` or ``time``; ``band`` may appear only as ``-1``.
 
     Notes
     -----
+    Only one chunking arrangement is legal, because
+    ``dask_gufunc_kwargs={'allow_rechunk': False}`` makes every alternative a
+    ``ValueError`` rather than a slow path: a single y/x(/time) block shape
+    applied to all three imagery arrays, with ``band`` and the whole LUT left
+    as one chunk each. Chunking the inputs *differently* from one another --
+    including chunking only some of them -- raises ``Dimension
+    '__loopdim0__' with different chunksize present``; chunking ``band``
+    raises ``Core dimension 'dim0' consists of multiple chunks``; and a
+    multi-chunk LUT raises ``Dimension 'dim5' with different chunksize
+    present``. ``chunks=`` is validated up front so these surface in this
+    API's own vocabulary rather than as internal dimension names.
+
+    Block size is a deliberate choice, not a default: the right value depends
+    on worker memory and per-pixel optimizer cost, which this library cannot
+    observe. Too small and per-block overhead starts to dominate the
+    GIL-releasing kernel; too large and the memory problem is not solved.
+
     The C++ inversion releases the Python GIL, so Dask clients with
     ``threads_per_worker > 1`` get real parallel speedup and share a single
     LUT copy per worker process — usually preferable to many single-threaded
@@ -265,6 +365,11 @@ def speedy_invert_dask(spectra_targets, spectra_backgrounds, obs_solar_angles,
 
     dask, Client = _import_dask()
     client = _resolve_client(client, Client)
+
+    if chunks is not None:
+        spectra_targets, spectra_backgrounds, obs_solar_angles = _apply_chunks(
+            chunks, spectra_targets, spectra_backgrounds, obs_solar_angles,
+        )
 
     if scatter_lut and client is not None:
         reflectances = _scatter_lut(client, interpolator.reflectances, dask)

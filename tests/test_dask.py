@@ -194,6 +194,134 @@ def test_lazy_time_stacked_result_dtype_survives_compute():
             "declared float32")
 
 
+def test_numpy_inputs_without_chunks_stay_single_block():
+    """Without ``chunks=``, numpy-backed inputs keep today's behaviour.
+
+    ``chunks=`` is opt-in: existing callers must see no change in execution
+    profile. ``dask='parallelized'`` promotes numpy-backed inputs to a single
+    block, so the kernel runs once over the full extent. See issue #14.
+    """
+    targets, backgrounds, angles = _make_inputs(ny=4, nx=4)
+    res = spires_inversion.speedy_invert_dask(
+        targets, backgrounds, angles, interpolator,
+        scatter_lut=False, algorithm=1)
+    _assert_pixels_match(res, ny=4, nx=4)
+
+
+def test_chunks_argument_splits_numpy_inputs_into_blocks():
+    """``chunks=`` makes the docstring's out-of-core promise deliverable.
+
+    The whole point of issue #14: numpy-backed inputs were never chunked and no
+    ``chunks=`` existed, so the inversion could not process data larger than
+    one worker's memory no matter how the caller asked.
+    """
+    targets, backgrounds, angles = _make_inputs(ny=4, nx=4)
+    res = spires_inversion.speedy_invert_dask(
+        targets, backgrounds, angles, interpolator,
+        scatter_lut=False, algorithm=1, chunks={'y': 2, 'x': 2})
+
+    assert res['fsnow'].data.npartitions == 4, (
+        f"expected 4 blocks from a 4x4 scene at 2x2, got "
+        f"{res['fsnow'].data.npartitions}")
+    _assert_pixels_match(res.compute(), ny=4, nx=4)
+
+
+def test_chunks_applies_uniformly_to_all_three_imagery_inputs():
+    """A single y/x block shape must reach targets, backgrounds and angles.
+
+    Chunking only *some* of the three inputs is itself an error under
+    ``allow_rechunk: False`` — partially-chunked input raises ``Dimension
+    '__loopdim0__' with different chunksize present``. So ``chunks=`` cannot be
+    forwarded to one array only.
+    """
+    targets, backgrounds, angles = _make_inputs(ny=4, nx=4)
+    res = spires_inversion.speedy_invert_dask(
+        targets, backgrounds, angles, interpolator,
+        scatter_lut=False, algorithm=1, chunks={'y': 2, 'x': 4})
+
+    # One y/x block shape, consistent across every result variable.
+    for name in ['fsnow', 'fshade', 'lap_concentration', 'grain_radius']:
+        assert res[name].data.chunks == ((2, 2), (4,)), (
+            f"{name} chunks are {res[name].data.chunks}, expected ((2, 2), (4,))")
+    _assert_pixels_match(res.compute(), ny=4, nx=4)
+
+
+def test_chunks_accepts_time_for_a_time_stacked_cube():
+    """``time`` is a loop dim too, so chunking it is legal and adds blocks."""
+    targets, backgrounds, angles = _make_inputs(ny=4, nx=4, nt=2)
+    res = spires_inversion.speedy_invert_dask(
+        targets, backgrounds, angles, interpolator,
+        scatter_lut=False, algorithm=1, chunks={'time': 1, 'y': 2, 'x': 2})
+
+    assert res['fsnow'].data.npartitions == 8, (
+        f"expected 8 blocks (2 time x 4 spatial), got "
+        f"{res['fsnow'].data.npartitions}")
+    _assert_pixels_match(res.compute(), ny=4, nx=4, nt=2)
+
+
+def test_chunks_rejects_band_in_the_librarys_own_vocabulary():
+    """``band`` is an input core dim, so it must stay one chunk.
+
+    Raised up front rather than letting dask surface ``Core dimension 'dim0'
+    consists of multiple chunks``, which names an internal dimension that
+    appears nowhere in this API.
+    """
+    targets, backgrounds, angles = _make_inputs(ny=4, nx=4)
+    with pytest.raises(ValueError, match="band"):
+        spires_inversion.speedy_invert_dask(
+            targets, backgrounds, angles, interpolator,
+            scatter_lut=False, algorithm=1, chunks={'y': 2, 'x': 2, 'band': 3})
+
+
+def test_chunks_allows_explicit_single_chunk_band():
+    """``band: -1`` says "one chunk", which is what the core dim requires."""
+    targets, backgrounds, angles = _make_inputs(ny=4, nx=4)
+    res = spires_inversion.speedy_invert_dask(
+        targets, backgrounds, angles, interpolator,
+        scatter_lut=False, algorithm=1, chunks={'y': 2, 'x': 2, 'band': -1})
+    assert res['fsnow'].data.npartitions == 4
+    _assert_pixels_match(res.compute(), ny=4, nx=4)
+
+
+def test_chunks_rejects_unknown_dimension():
+    """A dim not present on any imagery input is a caller mistake."""
+    targets, backgrounds, angles = _make_inputs(ny=4, nx=4)
+    with pytest.raises(ValueError, match="nosuchdim"):
+        spires_inversion.speedy_invert_dask(
+            targets, backgrounds, angles, interpolator,
+            scatter_lut=False, algorithm=1, chunks={'nosuchdim': 2})
+
+
+def test_chunks_rejects_non_mapping():
+    """``chunks`` is a dim->size mapping; a bare int has no legal meaning here.
+
+    A single number cannot be applied to every dim, because ``band`` must stay
+    one chunk, so there is no sensible broadcast.
+    """
+    targets, backgrounds, angles = _make_inputs(ny=4, nx=4)
+    with pytest.raises(TypeError, match="mapping"):
+        spires_inversion.speedy_invert_dask(
+            targets, backgrounds, angles, interpolator,
+            scatter_lut=False, algorithm=1, chunks=2)
+
+
+def test_chunks_rechunks_already_dask_inputs():
+    """``chunks=`` overrides a caller's existing, mismatched chunking.
+
+    Pre-chunked inputs that disagree on y/x would otherwise fail; passing
+    ``chunks=`` must impose one uniform shape rather than accumulate theirs.
+    """
+    targets, backgrounds, angles = _make_inputs(ny=4, nx=4)
+    targets = targets.chunk({'y': 1, 'x': 4})
+    backgrounds = backgrounds.chunk({'y': 4, 'x': 1})
+
+    res = spires_inversion.speedy_invert_dask(
+        targets, backgrounds, angles, interpolator,
+        scatter_lut=False, algorithm=1, chunks={'y': 2, 'x': 2})
+    assert res['fsnow'].data.npartitions == 4
+    _assert_pixels_match(res.compute(), ny=4, nx=4)
+
+
 @pytest.fixture(scope='module')
 def local_client():
     """A small in-process distributed client for the scatter tests."""
