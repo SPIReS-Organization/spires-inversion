@@ -153,6 +153,144 @@ def test_speedy_invert_dask_eager_output_is_validated():
     validate_results(res)
 
 
+def test_lazy_result_dtype_survives_compute():
+    """The declared float32 dtype must still hold after .compute().
+
+    apply_ufunc's ``output_dtypes`` is a declaration, not a cast: if the kernel
+    returns float64 the dask array reports float32 while materializing float64,
+    and ``.astype(np.float32)`` on such an array is a no-op (dask returns
+    ``self`` when the requested dtype equals the declared one). See issue #15.
+    """
+    chunks = {'y': 1, 'x': 2, 'band': -1}
+    targets, backgrounds, angles = _make_inputs(ny=2, nx=3, chunks=chunks)
+    res = spires_inversion.speedy_invert_dask(
+        targets, backgrounds, angles, interpolator,
+        scatter_lut=False, algorithm=1)
+
+    for name in ['fsnow', 'fshade', 'lap_concentration', 'grain_radius']:
+        assert res[name].chunks is not None, f"{name} should be lazy"
+        assert res[name].dtype == np.float32, f"{name} declared dtype"
+
+    computed = res.compute()
+    for name in ['fsnow', 'fshade', 'lap_concentration', 'grain_radius']:
+        assert computed[name].dtype == np.float32, (
+            f"{name} materialized as {computed[name].dtype}, but the lazy array "
+            "declared float32")
+
+
+def test_lazy_time_stacked_result_dtype_survives_compute():
+    """Same declaration/kernel agreement for the 4D time-stacked branch."""
+    chunks = {'y': 1, 'x': 2, 'band': -1}
+    targets, backgrounds, angles = _make_inputs(ny=2, nx=3, nt=2, chunks=chunks)
+    res = spires_inversion.speedy_invert_dask(
+        targets, backgrounds, angles, interpolator,
+        scatter_lut=False, algorithm=1)
+
+    assert res['fsnow'].chunks is not None
+    computed = res.compute()
+    for name in ['fsnow', 'fshade', 'lap_concentration', 'grain_radius']:
+        assert computed[name].dtype == np.float32, (
+            f"{name} materialized as {computed[name].dtype}, but the lazy array "
+            "declared float32")
+
+
+@pytest.fixture(scope='module')
+def local_client():
+    """A small in-process distributed client for the scatter tests."""
+    distributed = pytest.importorskip("dask.distributed")
+    cluster = distributed.LocalCluster(
+        n_workers=1, threads_per_worker=1, processes=False,
+        dashboard_address=None)
+    client = distributed.Client(cluster)
+    try:
+        yield client
+    finally:
+        client.close()
+        cluster.close()
+
+
+def test_scatter_lut_keys_are_unique_across_calls(local_client):
+    """Repeated scatters of the same LUT must not reuse dask keys.
+
+    ``dask.array.from_array`` names are content-addressed, so scattering the
+    same LUT twice produced identical keys. Identical keys across calls are the
+    precondition for dask's release-vs-registration race: call N's futures
+    release a key on the client's batched comm while call N+1 re-registers it
+    over a ``scheduler.update_data`` RPC, with nothing ordering the two, giving
+    ``FutureCancelledError: ... lost dependencies`` or a hang. See issue #16.
+    """
+    from spires_inversion.parallel import _import_dask, _scatter_lut
+
+    dask, _ = _import_dask()
+
+    first = _scatter_lut(local_client, interpolator.reflectances, dask)
+    second = _scatter_lut(local_client, interpolator.reflectances, dask)
+
+    assert first.name != second.name, (
+        "two scatters of identical LUT content produced the same dask key "
+        f"{first.name!r}; keys must be per-call unique")
+    assert set(first.dask).isdisjoint(set(second.dask)), (
+        "scattered graph keys overlap across calls")
+
+
+def test_scatter_lut_round_trips_and_is_single_chunk(local_client):
+    """The scattered LUT must equal its input and stay one chunk.
+
+    The four LUT dims are *input core dims* of the ``apply_ufunc`` call, so a
+    multi-chunk LUT raises ``Dimension 'dim1' with different chunksize
+    present``. One chunk must be stated explicitly, not inherited from the
+    global ``dask.config`` ``array.chunk-size`` default.
+    """
+    from spires_inversion.parallel import _import_dask, _scatter_lut
+
+    dask, _ = _import_dask()
+
+    reflectances = interpolator.reflectances
+    scattered = _scatter_lut(local_client, reflectances, dask)
+
+    assert scattered.npartitions == 1, (
+        f"LUT scattered into {scattered.npartitions} chunks; the apply_ufunc "
+        "core dims require exactly one")
+    assert scattered.shape == reflectances.shape
+    assert scattered.dtype == reflectances.dtype
+    np.testing.assert_array_equal(scattered.compute(), reflectances)
+
+
+def test_scatter_lut_single_chunk_under_small_chunk_size(local_client):
+    """One chunk must hold even when array.chunk-size is tiny.
+
+    ``from_array`` auto-chunks against ``dask.config`` ``array.chunk-size``
+    (128 MiB default), so the single-chunk invariant held only by accident for
+    LUTs smaller than that. A larger LUT, or a user who lowers the setting,
+    broke a code path that never mentions chunking.
+    """
+    from spires_inversion.parallel import _import_dask, _scatter_lut
+
+    dask, _ = _import_dask()
+
+    with dask.config.set({'array.chunk-size': '1MiB'}):
+        scattered = _scatter_lut(local_client, interpolator.reflectances, dask)
+
+    assert scattered.npartitions == 1, (
+        f"LUT scattered into {scattered.npartitions} chunks under a 1MiB "
+        "array.chunk-size; the single-chunk invariant must be explicit")
+    np.testing.assert_array_equal(
+        scattered.compute(), interpolator.reflectances)
+
+
+def test_speedy_invert_dask_with_scattered_lut(local_client):
+    """End-to-end inversion with scatter_lut=True against a real client."""
+    chunks = {'y': 1, 'x': 2, 'band': -1}
+    targets, backgrounds, angles = _make_inputs(ny=2, nx=3, chunks=chunks)
+    res = spires_inversion.speedy_invert_dask(
+        targets, backgrounds, angles, interpolator,
+        scatter_lut=True, client=local_client, algorithm=1)
+    res = res.compute()
+    _assert_pixels_match(res, ny=2, nx=3)
+    for name in ['fsnow', 'fshade', 'lap_concentration', 'grain_radius']:
+        assert res[name].dtype == np.float32
+
+
 def test_encode_results_uses_canonical_fsnow_scale_name():
     targets, backgrounds, angles = _make_inputs(ny=2, nx=3)
     results = spires_inversion.speedy_invert_dask(

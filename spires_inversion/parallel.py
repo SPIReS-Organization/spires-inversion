@@ -33,12 +33,35 @@ def _resolve_client(client, Client):
 
 
 def _scatter_lut(client, reflectances, dask):
-    """Broadcast the LUT to all workers as a dask array."""
-    arr = dask.array.from_array(reflectances)
-    scattered = client.scatter(dict(arr.dask), broadcast=True)
+    """Broadcast the LUT to all workers as a single-chunk dask array.
+
+    The LUT's four dims are *input core dims* of this module's ``apply_ufunc``
+    call, so the array must be exactly one chunk; ``chunks=-1`` states that
+    rather than inheriting it from ``dask.config``'s ``array.chunk-size``
+    (128 MiB default), under which a larger LUT silently split into several
+    chunks and failed with ``Dimension 'dim1' with different chunksize
+    present`` from a code path that never mentions chunking.
+
+    Scattering is done as a **list** with ``hash=False`` so the key is drawn
+    from ``uuid.uuid4()``. Scattering a dict (or a list with the default
+    ``hash=True``) yields content-addressed keys, identical on every call for
+    identical LUT content, which is the precondition for dask's
+    release-vs-registration race: call N's futures release a key over the
+    client's batched comm while call N+1 re-registers it over a
+    ``scheduler.update_data`` RPC, with nothing ordering the two. Losing that
+    race raises ``FutureCancelledError: ... lost dependencies`` or hangs.
+
+    The returned array owns the ``Future`` in its graph, so the data stays
+    resident on the workers for as long as the array is referenced.
+    """
+    # from_array supplies chunks/dtype/meta/shape; its own graph is discarded
+    # in favour of the single scattered future.
+    arr = dask.array.from_array(reflectances, chunks=-1)
+    (future,) = client.scatter([reflectances], broadcast=True, hash=False)
+    name = "spires-lut-" + future.key
     return dask.array.Array(
-        scattered,
-        name=arr.name,
+        {(name,) + (0,) * reflectances.ndim: future},
+        name=name,
         chunks=arr.chunks,
         dtype=arr.dtype,
         meta=arr._meta,
@@ -46,11 +69,23 @@ def _scatter_lut(client, reflectances, dask):
     )
 
 
+#: dtype of the blocks ``_make_invert_chunk``'s kernel returns. Must stay in
+#: step with the ``output_dtypes`` declared on the ``apply_ufunc`` call below:
+#: ``output_dtypes`` is only a *declaration*, so a mismatch yields a dask array
+#: that reports one dtype and materializes another, and whose ``.astype`` to
+#: the declared dtype is a silent no-op (dask returns ``self``). The solver
+#: itself is unaffected — coordinate axes, shade, solar angles and the kernel's
+#: own results buffer stay ``double``; this narrows only at the dask boundary,
+#: which is also what makes the result bytes match the float32 results contract.
+_RESULT_DTYPE = np.float32
+
+
 def _make_invert_chunk(max_eval, x0, algorithm):
     """Build the per-chunk inversion function passed to apply_ufunc.
 
     Handles both the no-time (3D) and with-time (4D) layouts that
-    apply_ufunc may hand to a single chunk.
+    apply_ufunc may hand to a single chunk. Blocks are returned as
+    ``_RESULT_DTYPE`` to match the declared ``output_dtypes``.
     """
     def _invert(spectra_targets, spectra_backgrounds, obs_solar_angles,
                 bands, solar_angles, lap, grain, reflectances):
@@ -66,10 +101,15 @@ def _make_invert_chunk(max_eval, x0, algorithm):
         )
         if spectra_targets.ndim == 4:
             n_time = spectra_targets.shape[0]
-            results = np.empty((n_time,) + spectra_targets.shape[1:3] + (4,))
+            results = np.empty(
+                (n_time,) + spectra_targets.shape[1:3] + (4,),
+                dtype=_RESULT_DTYPE,
+            )
             bg_t = spectra_backgrounds.ndim == 4
             sa_t = obs_solar_angles.ndim == 3
             for t in range(n_time):
+                # speedy_invert_array2d returns double; assignment into the
+                # float32 buffer narrows each scene as it lands.
                 results[t] = speedy_invert_array2d(
                     spectra_targets=spectra_targets[t],
                     spectra_backgrounds=spectra_backgrounds[t] if bg_t else spectra_backgrounds,
@@ -82,7 +122,7 @@ def _make_invert_chunk(max_eval, x0, algorithm):
             spectra_backgrounds=spectra_backgrounds,
             obs_solar_angles=obs_solar_angles,
             **common,
-        )
+        ).astype(_RESULT_DTYPE, copy=False)
     return _invert
 
 
@@ -250,7 +290,7 @@ def speedy_invert_dask(spectra_targets, spectra_backgrounds, obs_solar_angles,
             ['bands', 'sz', 'lap', 'grain'],
         ],
         output_core_dims=[['property']],
-        output_dtypes=[np.float32],
+        output_dtypes=[_RESULT_DTYPE],
         dask_gufunc_kwargs={
             'allow_rechunk': False,
             'output_sizes': {'property': 4},
