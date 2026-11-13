@@ -488,3 +488,21 @@ def test_float32_gives_physical_results():
                   (res[..., 2] <= interp.lap_concentrations.max()))
     assert np.all((res[..., 3] >= interp.grain_sizes.min()) &
                   (res[..., 3] <= interp.grain_sizes.max()))
+
+
+def test_interpolate_just_above_grain_axis_minimum_is_in_bounds(capfd):
+    """A grain axis whose first gap exceeds its second (as in the real HLS LUT)
+    used to yield a negative fractional index for values just above axis[0],
+    which the bounds check rejected with 'Coordinates out of bounds'."""
+    grains = 5.477 + np.concatenate([[0.0], np.cumsum([0.8473, 0.7465, 0.7465, 0.7465])])
+    bands = np.array([1.0, 2.0])
+    solars = np.array([0.0, 10.0, 20.0])
+    laps = np.array([0.0, 100.0, 200.0])
+    lut = np.ones((2, 3, 3, grains.size), dtype=np.float32)
+    for v in (grains[0] + 0.01, grains[0] + 0.0306, grains[1] - 1e-6):
+        ret = spires_inversion.core.interpolate(
+            lut_reflectances=lut, lut_bands=bands, lut_solar_angles=solars,
+            lut_lap_concentrations=laps, lut_grain_sizes=grains,
+            band=1, solar_angle=5.0, lap_concentration=50.0, grain_size=float(v))
+        assert ret == pytest.approx(1.0)
+    assert "out of bounds" not in capfd.readouterr().err

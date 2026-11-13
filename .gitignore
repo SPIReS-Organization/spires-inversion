@@ -35,3 +35,4 @@ tests/data/sentinel_r0.nc
 
 # superpowers planning/specs (local only; real Sphinx docs live in doc/)
 docs/
+/spires_inversion/_core.src.sha256

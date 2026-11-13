@@ -4,6 +4,8 @@ import numpy
 import setuptools
 from setuptools.command.build_py import build_py as _build_py
 import os
+import hashlib
+from setuptools.command.build_ext import build_ext as _build_ext
 
 
 conda_prefix = os.environ.get("CONDA_PREFIX", "/usr")  # fallback if not in conda
@@ -42,6 +44,21 @@ spires = setuptools.Extension(
 )
 
 
+def source_digest(root="spires_inversion"):
+    h = hashlib.sha256()
+    for name in ("spires.cpp", "spires.h"):
+        with open(os.path.join(root, name), "rb") as f:
+            h.update(f.read())
+    return h.hexdigest()
+
+
+class build_ext(_build_ext):
+    def run(self):
+        super().run()
+        with open(os.path.join("spires_inversion", "_core.src.sha256"), "w") as f:
+            f.write(source_digest() + "\n")
+
+
 class build_py(_build_py):
 
     def run(self):
@@ -55,5 +72,5 @@ class build_py(_build_py):
 setuptools.setup(
     packages=setuptools.find_packages(),
     ext_modules=[spires],
-    cmdclass={'build_py': build_py},
+    cmdclass={'build_py': build_py, 'build_ext': build_ext},
 )
