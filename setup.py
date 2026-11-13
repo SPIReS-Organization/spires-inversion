@@ -24,7 +24,10 @@ NLOP_INCLUDE_DIRS = [
     '/opt/homebrew/include',
     #'/opt/homebrew/Cellar/nlopt/2.7.1/include',    # For ARM
     #'/usr/local/Cellar/nlopt/2.7.1/include',       # For x86
-    '/usr/include',                                # system includes (e.g. nlopt.hpp)
+    # Never add '/usr/include' here: with a conda-forge gcc it shadows the
+    # compiler's own sysroot headers (bits/mathcalls-macros.h missing on
+    # ubuntu-26.04 runners). The non-conda case is covered by the
+    # conda_prefix fallback below.
     '/usr/local/include',                          # custom install path
     'include',                                     # local project includes
     os.path.join(conda_prefix, 'include'),
