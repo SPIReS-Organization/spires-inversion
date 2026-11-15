@@ -80,6 +80,6 @@ For processing your own Sentinel-2 data:
 
 ## Notes
 
-- Notebooks assume data is stored in `/scratch/tristate/` or `/data/sentinel2/` directories
+- Notebooks assume locally stored Sentinel-2 / Landsat zarr stacks; adjust the paths at the top of each
 - Most workflows are designed for UCSB region but can be adapted
 - Large notebooks (>1MB) contain embedded outputs and visualizations

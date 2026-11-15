@@ -33,11 +33,11 @@ def main():
     region = 'UCSB'
 
     # Load observations
-    ds = xr.open_zarr(f'/scratch/tristate/{region}_sharp.zarr/')
+    ds = xr.open_zarr(f'{region}_sharp.zarr/')
     ds = ds.sel(band=['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B11', 'B12', 'B8'])
 
     # Load background reflectances
-    ds_r0 = xr.open_zarr(f'/scratch/tristate/{region}_r0.zarr/')
+    ds_r0 = xr.open_zarr(f'{region}_r0.zarr/')
     ds_r0 = ds_r0.sel(band=['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B11', 'B12', 'B8'])
 
     # Load LUT

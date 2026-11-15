@@ -6,9 +6,6 @@ import numpy as np
 import xarray as xr
 import sys
 
-# Add the package to path if needed
-sys.path.insert(0, '/home/griessban/SpiPy')
-
 try:
     import spires_inversion
     print("✓ Successfully imported spires_inversion")
