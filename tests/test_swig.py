@@ -565,3 +565,26 @@ def test_nan_coordinate_is_rejected_without_crash(which):
     # A NaN coordinate is an invalid index: the kernel reports it through the
     # same out-of-bounds sentinel as any other rejected coordinate, never a read.
     assert proc.stdout.strip() == "[-1.0]"
+
+
+def test_invert_algorithm1_nan_solar_angle_does_not_crash():
+    """Algorithm 1 (COBYLA) crashed the process when the solar angle was NaN:
+    the NaN reached the same unchecked index path as the grain case. The batch
+    entry points are covered elsewhere; this pins the single-pixel constrained
+    path that was reported as a segfault. Subprocess-isolated so a regression
+    fails with a nonzero exit code instead of killing pytest."""
+    script = (
+        "import numpy as np, spires_inversion.core as c\n"
+        "from spires_inversion import LutInterpolator\n"
+        "it = LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')\n"
+        "T = np.array([0.3424, 0.366, 0.3624, 0.38932347, 0.41624767, 0.39567757, 0.07043362, 0.06267947, 0.3792], dtype=np.float32)\n"
+        "B = np.array([0.0182, 0.0265, 0.0283, 0.05606749, 0.09543234, 0.12036866, 0.12491679, 0.07888655, 0.1406], dtype=np.float32)\n"
+        "r = c.invert(spectrum_background=B, spectrum_target=T, spectrum_shade=np.zeros(9),\n"
+        "    solar_angle=float('nan'), lut_bands=it.bands, lut_solar_angles=it.solar_angles,\n"
+        "    lut_lap_concentrations=it.lap_concentrations, lut_grain_sizes=it.grain_sizes,\n"
+        "    lut_reflectances=it.reflectances, max_eval=100, x0=[0.5, 0.05, 10, 250], algorithm=1)\n"
+        "print(len(r))\n"
+    )
+    proc = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=300)
+    assert proc.returncode == 0, f"exit {proc.returncode}: {proc.stderr[-300:]}"
+    assert proc.stdout.strip() == "4"
