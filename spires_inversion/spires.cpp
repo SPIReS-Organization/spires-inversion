@@ -681,7 +681,11 @@ std::vector<double> invert_impl(const T* spectrum_background, int len_background
                            std::vector<double> x0,
                            int algorithm) {
 
-    if (spectrum_has_nan<T>(spectrum_target, len_target)) {
+    // A NaN target, solar angle, or starting point is invalid input. Return an
+    // all-NaN retrieval rather than a finite answer computed from rejected
+    // (-1) model values or a NaN-seeded optimizer.
+    bool x0_has_nan = std::any_of(x0.begin(), x0.end(), [](double v) { return std::isnan(v); });
+    if (spectrum_has_nan<T>(spectrum_target, len_target) || std::isnan(solar_angle) || x0_has_nan) {
         return std::vector<double>(4, std::nan(""));
     }
 

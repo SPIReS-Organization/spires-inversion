@@ -567,24 +567,39 @@ def test_nan_coordinate_is_rejected_without_crash(which):
     assert proc.stdout.strip() == "[-1.0]"
 
 
-def test_invert_algorithm1_nan_solar_angle_does_not_crash():
-    """Algorithm 1 (COBYLA) crashed the process when the solar angle was NaN:
-    the NaN reached the same unchecked index path as the grain case. The batch
-    entry points are covered elsewhere; this pins the single-pixel constrained
-    path that was reported as a segfault. Subprocess-isolated so a regression
-    fails with a nonzero exit code instead of killing pytest."""
+@pytest.mark.parametrize("algorithm", [1, 2, 3, 4, 5, 6])
+def test_invert_nan_solar_angle_returns_all_nan(algorithm):
+    """A NaN solar angle is invalid input. It must yield an all-NaN retrieval for
+    every algorithm, mirroring the NaN-target guard in invert_impl. Previously
+    algorithm 1 segfaulted on it, and the other algorithms returned finite
+    numbers computed from rejected (-1) model values. Run in a subprocess so a
+    crash fails with a nonzero exit code rather than killing pytest."""
     script = (
         "import numpy as np, spires_inversion.core as c\n"
         "from spires_inversion import LutInterpolator\n"
         "it = LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')\n"
         "T = np.array([0.3424, 0.366, 0.3624, 0.38932347, 0.41624767, 0.39567757, 0.07043362, 0.06267947, 0.3792], dtype=np.float32)\n"
         "B = np.array([0.0182, 0.0265, 0.0283, 0.05606749, 0.09543234, 0.12036866, 0.12491679, 0.07888655, 0.1406], dtype=np.float32)\n"
-        "r = c.invert(spectrum_background=B, spectrum_target=T, spectrum_shade=np.zeros(9),\n"
+        "r = np.asarray(c.invert(spectrum_background=B, spectrum_target=T, spectrum_shade=np.zeros(9),\n"
         "    solar_angle=float('nan'), lut_bands=it.bands, lut_solar_angles=it.solar_angles,\n"
         "    lut_lap_concentrations=it.lap_concentrations, lut_grain_sizes=it.grain_sizes,\n"
-        "    lut_reflectances=it.reflectances, max_eval=100, x0=[0.5, 0.05, 10, 250], algorithm=1)\n"
-        "print(len(r))\n"
+        f"    lut_reflectances=it.reflectances, max_eval=100, x0=[0.5, 0.05, 10, 250], algorithm={algorithm}))\n"
+        "print(len(r), bool(np.isnan(r).all()))\n"
     )
     proc = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=300)
     assert proc.returncode == 0, f"exit {proc.returncode}: {proc.stderr[-300:]}"
-    assert proc.stdout.strip() == "4"
+    assert proc.stdout.strip() == "4 True", f"expected all-NaN length-4 result, got {proc.stdout.strip()!r}"
+
+
+@pytest.mark.parametrize("algorithm", [1, 2, 3, 4, 5, 6])
+def test_invert_finite_solar_angle_is_not_nan(algorithm):
+    """Control for the NaN-solar guard: a valid solar angle must still produce a
+    finite retrieval, so the guard cannot pass by rejecting every input."""
+    r = np.asarray(spires_inversion.core.invert(
+        spectrum_background=spectrum_background, spectrum_target=spectrum_target,
+        spectrum_shade=spectrum_shade, solar_angle=solar_angle,
+        lut_bands=interpolator.bands, lut_solar_angles=interpolator.solar_angles,
+        lut_lap_concentrations=interpolator.lap_concentrations,
+        lut_grain_sizes=interpolator.grain_sizes, lut_reflectances=interpolator.reflectances,
+        max_eval=100, x0=x0, algorithm=algorithm))
+    assert np.all(np.isfinite(r)), r
