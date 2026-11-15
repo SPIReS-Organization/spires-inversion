@@ -67,6 +67,7 @@ def test_interpolate_all_array():
 
     np.testing.assert_allclose(interpolate_grain(1.0), [1.0])
     np.testing.assert_allclose(interpolate_grain(2.5), [2.5])
+    np.testing.assert_allclose(interpolate_grain(6.0), [6.0])
     np.testing.assert_allclose(interpolate_grain(9.0), [9.0])
     assert spires_inversion.get_index(nonlinear_grain, 1.0) == 0.0
     assert spires_inversion.get_index(nonlinear_grain, 2.5) == 0.5
