@@ -545,10 +545,9 @@ def test_softmax_sigmoid_is_clamped_to_upper_bound(capfd):
 
 @pytest.mark.parametrize("which", ["grain", "solar", "lap"])
 def test_nan_coordinate_is_rejected_without_crash(which):
-    """A NaN coordinate must not reach an out-of-bounds read. Every comparison
-    with NaN is false, so the range guard used to pass and an int-cast NaN index
-    was used as an array subscript (segfault). Run in a subprocess so a
-    regression reports as a nonzero exit code rather than killing pytest."""
+    """A NaN coordinate must be rejected with the out-of-bounds sentinel and must
+    never reach an out-of-bounds read. Run in a subprocess so a crash reports as
+    a nonzero exit code rather than killing pytest."""
     script = (
         "import numpy as np, spires_inversion.core as c\n"
         "ax = np.array([0.0, 1.0, 2.0])\n"
@@ -568,12 +567,37 @@ def test_nan_coordinate_is_rejected_without_crash(which):
 
 
 @pytest.mark.parametrize("algorithm", [1, 2, 3, 4, 5, 6])
+@pytest.mark.parametrize("slot", [0, 1, 2, 3])
+def test_invert_nan_x0_returns_all_nan(algorithm, slot):
+    """A NaN in any starting-point slot must give an all-NaN retrieval for every
+    algorithm, matching the NaN solar-angle guard in invert_impl. Run in a
+    subprocess so a crash fails with a nonzero exit code rather than killing
+    pytest."""
+    script = (
+        "import numpy as np, spires_inversion.core as c\n"
+        "from spires_inversion import LutInterpolator\n"
+        "it = LutInterpolator(lut_file='tests/data/lut_sentinel2b_b2to12_3um_dust.mat')\n"
+        "T = np.array([0.3424, 0.366, 0.3624, 0.38932347, 0.41624767, 0.39567757, 0.07043362, 0.06267947, 0.3792], dtype=np.float32)\n"
+        "B = np.array([0.0182, 0.0265, 0.0283, 0.05606749, 0.09543234, 0.12036866, 0.12491679, 0.07888655, 0.1406], dtype=np.float32)\n"
+        "x0 = [0.5, 0.05, 10.0, 250.0]\n"
+        f"x0[{slot}] = float('nan')\n"
+        "r = np.asarray(c.invert(spectrum_background=B, spectrum_target=T, spectrum_shade=np.zeros(9),\n"
+        "    solar_angle=55.73733298, lut_bands=it.bands, lut_solar_angles=it.solar_angles,\n"
+        "    lut_lap_concentrations=it.lap_concentrations, lut_grain_sizes=it.grain_sizes,\n"
+        f"    lut_reflectances=it.reflectances, max_eval=100, x0=x0, algorithm={algorithm}))\n"
+        "print(len(r), bool(np.isnan(r).all()))\n"
+    )
+    proc = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=300)
+    assert proc.returncode == 0, f"exit {proc.returncode}: {proc.stderr[-300:]}"
+    assert proc.stdout.strip() == "4 True", f"expected all-NaN length-4 result, got {proc.stdout.strip()!r}"
+
+
+@pytest.mark.parametrize("algorithm", [1, 2, 3, 4, 5, 6])
 def test_invert_nan_solar_angle_returns_all_nan(algorithm):
-    """A NaN solar angle is invalid input. It must yield an all-NaN retrieval for
-    every algorithm, mirroring the NaN-target guard in invert_impl. Previously
-    algorithm 1 segfaulted on it, and the other algorithms returned finite
-    numbers computed from rejected (-1) model values. Run in a subprocess so a
-    crash fails with a nonzero exit code rather than killing pytest."""
+    """A NaN solar angle is invalid input and must yield an all-NaN retrieval for
+    every algorithm, matching the NaN-target guard in invert_impl. Run in a
+    subprocess so a crash fails with a nonzero exit code rather than killing
+    pytest."""
     script = (
         "import numpy as np, spires_inversion.core as c\n"
         "from spires_inversion import LutInterpolator\n"
