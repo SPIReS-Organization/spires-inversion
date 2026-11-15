@@ -316,7 +316,10 @@ static inline void softmax_to_fractions(double z_snow, double z_shade,
 
 
 static inline double sigmoid_to_bounded(double z, double lo, double hi) {
-    return lo + (hi - lo) / (1.0 + std::exp(-z));
+    // lo + (hi - lo) * s can round one step past hi for a non-round bound even
+    // when s == 1, and get_idx then rejects the value. Clamp to the axis range.
+    double v = lo + (hi - lo) / (1.0 + std::exp(-z));
+    return std::min(std::max(v, lo), hi);
 }
 
 

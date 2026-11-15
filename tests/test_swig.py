@@ -512,6 +512,37 @@ def test_interpolate_just_above_grain_axis_minimum_is_in_bounds(capfd):
     assert "out of bounds" not in capfd.readouterr().err
 
 
+def test_softmax_sigmoid_is_clamped_to_upper_bound(capfd):
+    """The softmax reparameterization maps z to lo + (hi - lo) * sigmoid(z). For
+    some non-round axis bounds that expression rounds one ULP-scale step past hi,
+    and get_idx then rejects the value (flooding stderr and feeding -1 into the
+    model). At large z the cost must equal the physical cost evaluated at exactly
+    hi, and no out-of-bounds message may be emitted."""
+    lo, hi = 292.6776761706994, 959.3730501853148
+    laps = np.array([0.0, 100.0, 200.0])
+    grains = np.array([lo, (lo + hi) / 2, hi])
+    solars = np.array([0.0, 30.0, 60.0])
+    bands = np.array([1.0, 2.0, 3.0, 4.0])
+    lut = np.random.default_rng(5).uniform(0.1, 0.9, size=(4, 3, 3, 3)).astype(np.float32)
+    background = np.random.default_rng(6).uniform(0.05, 0.3, 4).astype(np.float32)
+    target = np.random.default_rng(7).uniform(0.05, 0.3, 4).astype(np.float32)
+    shade = np.zeros(4)
+
+    # Upper bound on both axes: z=50 saturates the sigmoid to 1.
+    z_big = [0.0, 0.0, 50.0, 50.0]
+    x_top = spires_inversion.core.z_to_x(z_big, 0.0, 200.0, lo, hi)
+    assert x_top[2] <= 200.0 and x_top[3] <= hi, x_top
+
+    cost_softmax = spires_inversion.core.spectrum_difference_softmax(
+        z_big, background, target, shade, 30.0, bands, solars, laps, grains, lut)
+    # Equal fractions (z_snow = z_shade = 0) with dust/grain pinned to the top.
+    cost_physical = spires_inversion.core.spectrum_difference(
+        [1.0 / 3.0, 1.0 / 3.0, 200.0, hi], background, target, shade, 30.0,
+        bands, solars, laps, grains, lut)
+    assert cost_softmax == pytest.approx(cost_physical, rel=1e-9, abs=1e-12)
+    assert "out of bounds" not in capfd.readouterr().err
+
+
 @pytest.mark.parametrize("which", ["grain", "solar", "lap"])
 def test_nan_coordinate_is_rejected_without_crash(which):
     """A NaN coordinate must not reach an out-of-bounds read. Every comparison
