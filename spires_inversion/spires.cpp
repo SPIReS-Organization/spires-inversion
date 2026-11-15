@@ -123,6 +123,11 @@ double get_idx(double value, double* coordinates, int len_coordinates) {
         return -1.0;
     }
 
+    // NaN compares false against everything, so it would slip past the range
+    // checks below and reach std::upper_bound, which then returns end() and
+    // reads coordinates[len]. Reject it explicitly as an invalid index.
+    if (std::isnan(value)) return -1.0;
+
     // Preserve out-of-range values as invalid indices so interpolate_idx_impl
     // rejects them rather than clipping or extrapolating.
     if (value < coordinates[0]) return -1.0;

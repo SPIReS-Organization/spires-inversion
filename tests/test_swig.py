@@ -1,3 +1,6 @@
+import subprocess
+import sys
+
 import numpy as np
 import spires_inversion.core
 import spires_inversion
@@ -507,3 +510,27 @@ def test_interpolate_just_above_grain_axis_minimum_is_in_bounds(capfd):
             band=1, solar_angle=5.0, lap_concentration=50.0, grain_size=float(v))
         assert ret == pytest.approx(1.0)
     assert "out of bounds" not in capfd.readouterr().err
+
+
+@pytest.mark.parametrize("which", ["grain", "solar", "lap"])
+def test_nan_coordinate_is_rejected_without_crash(which):
+    """A NaN coordinate must not reach an out-of-bounds read. Every comparison
+    with NaN is false, so the range guard used to pass and an int-cast NaN index
+    was used as an array subscript (segfault). Run in a subprocess so a
+    regression reports as a nonzero exit code rather than killing pytest."""
+    script = (
+        "import numpy as np, spires_inversion.core as c\n"
+        "ax = np.array([0.0, 1.0, 2.0])\n"
+        "lut = np.arange(27, dtype=np.float32).reshape(1, 3, 3, 3)\n"
+        "vals = {'solar': 1.0, 'lap': 1.0, 'grain': 1.0}\n"
+        f"vals['{which}'] = float('nan')\n"
+        "r = c.interpolate_all_array(lut_reflectances=lut, lut_bands=np.array([1.0]),\n"
+        "    lut_solar_angles=ax, lut_lap_concentrations=ax, lut_grain_sizes=ax,\n"
+        "    solar_angle=vals['solar'], lap_concentration=vals['lap'], grain_size=vals['grain'])\n"
+        "print(r.tolist())\n"
+    )
+    proc = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=120)
+    assert proc.returncode == 0, f"exit {proc.returncode}: {proc.stderr[-300:]}"
+    # A NaN coordinate is an invalid index: the kernel reports it through the
+    # same out-of-bounds sentinel as any other rejected coordinate, never a read.
+    assert proc.stdout.strip() == "[-1.0]"
