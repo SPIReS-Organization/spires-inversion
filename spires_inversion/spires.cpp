@@ -30,11 +30,14 @@ template<typename T>
 double interpolate_idx_impl(const T* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_lap_concentrations, int n_lut_grain_sizes,
                             int band_idx, double solar_angle_idx, double lap_concentration_idx, double grain_size_idx) {
 
-    // Half-open contract: valid index ranges are [0, n_*).
+    // Valid index ranges are [0, n_*-1] for the fractional indices. The
+    // in-range conditions are written positively and negated: a NaN index makes
+    // every comparison false, so `!(x >= 0 && x <= n-1)` rejects it, whereas
+    // `x < 0 || x > n-1` would let it through to an unchecked array read.
     if (band_idx < 0 || band_idx >= n_lut_bands ||
-        solar_angle_idx < 0 || solar_angle_idx > n_lut_solar_angles - 1 ||
-        lap_concentration_idx < 0 || lap_concentration_idx > n_lut_lap_concentrations - 1 ||
-        grain_size_idx < 0 || grain_size_idx > n_lut_grain_sizes - 1) {
+        !(solar_angle_idx >= 0 && solar_angle_idx <= n_lut_solar_angles - 1) ||
+        !(lap_concentration_idx >= 0 && lap_concentration_idx <= n_lut_lap_concentrations - 1) ||
+        !(grain_size_idx >= 0 && grain_size_idx <= n_lut_grain_sizes - 1)) {
         std::cerr << "Error: Coordinates out of bounds" << std::endl;
         return -1;
     }

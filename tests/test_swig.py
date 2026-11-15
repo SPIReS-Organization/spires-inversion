@@ -603,3 +603,23 @@ def test_invert_finite_solar_angle_is_not_nan(algorithm):
         lut_grain_sizes=interpolator.grain_sizes, lut_reflectances=interpolator.reflectances,
         max_eval=100, x0=x0, algorithm=algorithm))
     assert np.all(np.isfinite(r)), r
+
+
+@pytest.mark.parametrize("slot", ["solar", "lap", "grain"])
+def test_interpolate_idx_nan_index_is_rejected_without_crash(slot):
+    """The SWIG interpolate_idx entry point must reject a NaN in each fractional
+    index slot with the out-of-bounds sentinel rather than reading the LUT. The
+    band index is an integer and cannot be NaN. Run in a subprocess so a crash
+    fails with a nonzero exit code instead of killing pytest."""
+    # Literal source for each slot: repr(nan) is the bare name `nan`, which the
+    # subprocess cannot resolve, so spell NaN out as float('nan').
+    solar, lap, grain = ("float('nan')" if s == slot else "0.0" for s in ("solar", "lap", "grain"))
+    script = (
+        "import numpy as np, spires_inversion.core as c\n"
+        "lut = np.ones((1, 3, 3, 3), dtype=np.float32)\n"
+        f"r = c.interpolate_idx(lut, 0, {solar}, {lap}, {grain})\n"
+        "print(r)\n"
+    )
+    proc = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=120)
+    assert proc.returncode == 0, f"exit {proc.returncode}: {proc.stderr[-300:]}"
+    assert proc.stdout.strip() == "-1.0"
