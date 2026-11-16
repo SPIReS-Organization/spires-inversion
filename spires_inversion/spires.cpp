@@ -30,11 +30,14 @@ template<typename T>
 double interpolate_idx_impl(const T* lut_reflectances, int n_lut_bands, int n_lut_solar_angles, int n_lut_lap_concentrations, int n_lut_grain_sizes,
                             int band_idx, double solar_angle_idx, double lap_concentration_idx, double grain_size_idx) {
 
-    // Half-open contract: valid index ranges are [0, n_*).
+    // Valid index ranges are [0, n_*-1] for the fractional indices. The
+    // in-range conditions are written positively and negated: a NaN index makes
+    // every comparison false, so `!(x >= 0 && x <= n-1)` rejects it, whereas
+    // `x < 0 || x > n-1` would let it through to an unchecked array read.
     if (band_idx < 0 || band_idx >= n_lut_bands ||
-        solar_angle_idx < 0 || solar_angle_idx > n_lut_solar_angles - 1 ||
-        lap_concentration_idx < 0 || lap_concentration_idx > n_lut_lap_concentrations - 1 ||
-        grain_size_idx < 0 || grain_size_idx > n_lut_grain_sizes - 1) {
+        !(solar_angle_idx >= 0 && solar_angle_idx <= n_lut_solar_angles - 1) ||
+        !(lap_concentration_idx >= 0 && lap_concentration_idx <= n_lut_lap_concentrations - 1) ||
+        !(grain_size_idx >= 0 && grain_size_idx <= n_lut_grain_sizes - 1)) {
         std::cerr << "Error: Coordinates out of bounds" << std::endl;
         return -1;
     }
@@ -122,6 +125,11 @@ double get_idx(double value, double* coordinates, int len_coordinates) {
         std::cerr << "Error: Coordinate axes must contain at least two values" << std::endl;
         return -1.0;
     }
+
+    // NaN compares false against everything, so it would slip past the range
+    // checks below and reach std::upper_bound, which then returns end() and
+    // reads coordinates[len]. Reject it explicitly as an invalid index.
+    if (std::isnan(value)) return -1.0;
 
     // Preserve out-of-range values as invalid indices so interpolate_idx_impl
     // rejects them rather than clipping or extrapolating.
@@ -311,7 +319,11 @@ static inline void softmax_to_fractions(double z_snow, double z_shade,
 
 
 static inline double sigmoid_to_bounded(double z, double lo, double hi) {
-    return lo + (hi - lo) / (1.0 + std::exp(-z));
+    // lo + (hi - lo) / (1 + exp(-z)) can round one step past hi for a non-round
+    // bound even when the sigmoid is 1, and get_idx then rejects the value.
+    // Clamp to the axis range.
+    double v = lo + (hi - lo) / (1.0 + std::exp(-z));
+    return std::min(std::max(v, lo), hi);
 }
 
 
@@ -673,7 +685,11 @@ std::vector<double> invert_impl(const T* spectrum_background, int len_background
                            std::vector<double> x0,
                            int algorithm) {
 
-    if (spectrum_has_nan<T>(spectrum_target, len_target)) {
+    // A NaN target, solar angle, or starting point is invalid input. Return an
+    // all-NaN retrieval rather than a finite answer computed from rejected
+    // (-1) model values or a NaN-seeded optimizer.
+    bool x0_has_nan = std::any_of(x0.begin(), x0.end(), [](double v) { return std::isnan(v); });
+    if (spectrum_has_nan<T>(spectrum_target, len_target) || std::isnan(solar_angle) || x0_has_nan) {
         return std::vector<double>(4, std::nan(""));
     }
 
