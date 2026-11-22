@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel", "numpy", "setuptools-scm"]
+requires = ["setuptools>=77", "wheel", "numpy", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
 
@@ -12,12 +12,12 @@ authors = [
 ]
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.9"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 keywords = ["remote sensing", "snow", "satellite", "spectral unmixing", "MODIS", "Sentinel-2", "Landsat"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
